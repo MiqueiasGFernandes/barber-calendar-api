@@ -5,7 +5,7 @@ Este guia define cenários executáveis para validar cadastro e login por OTP en
 ## Pré-requisitos
 
 - Node.js 24.21.x LTS
-- pnpm 12.10.x
+- Yarn 4.18.x
 - Docker com Compose
 - portas locais de API, PostgreSQL E2E e Mailpit disponíveis
 
@@ -13,8 +13,8 @@ Confirme as versões e instale exatamente o lockfile:
 
 ```bash
 node --version
-pnpm --version
-pnpm install --frozen-lockfile
+yarn --version
+yarn install --immutable
 ```
 
 ## Preparar configuração local
@@ -31,11 +31,11 @@ Peppers HMAC, chave AES da outbox e chave privada JWT são segredos distintos. N
 ## Executar portões rápidos
 
 ```bash
-pnpm lint
-pnpm typecheck
-pnpm test:unit
-pnpm contract:check
-pnpm schema:check
+yarn lint
+yarn typecheck
+yarn test:unit
+yarn contract:check
+yarn schema:check
 ```
 
 Resultado esperado: lint, TypeScript estrito, testes unitários, regras de fronteira entre módulos e contrato OpenAPI passam sem acessar infraestrutura.
@@ -69,8 +69,8 @@ docker compose -p barber-e2e -f compose.e2e.yaml exec -T db-e2e \
 ## Executar integração e E2E
 
 ```bash
-pnpm test:integration
-pnpm test:e2e
+yarn test:integration
+yarn test:e2e
 ```
 
 Resultado esperado: adapters SQL, locks, constraints, rollback, API e worker usam o PostgreSQL real do Compose. A suíte não usa SQLite, banco em memória, Testcontainers ou mocks de PostgreSQL.

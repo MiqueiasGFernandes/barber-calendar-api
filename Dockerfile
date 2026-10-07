@@ -1,17 +1,17 @@
 FROM node:24.21.0-alpine AS dependencies
-RUN corepack enable && corepack prepare pnpm@12.10.1 --activate
+RUN corepack enable
 WORKDIR /app
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY package.json yarn.lock .yarnrc.yml ./
 COPY .husky ./.husky
-RUN pnpm install --frozen-lockfile
+RUN yarn install --immutable
 
 FROM dependencies AS build
 COPY nest-cli.json tsconfig.json tsconfig.build.json ./
 COPY src ./src
-RUN pnpm build
+RUN yarn build
 
 FROM dependencies AS production-dependencies
-RUN pnpm prune --prod
+RUN yarn workspaces focus --production
 
 FROM node:24.21.0-alpine AS runtime
 ENV NODE_ENV=production

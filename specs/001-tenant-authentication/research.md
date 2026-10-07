@@ -1,16 +1,16 @@
 # Pesquisa: Autenticação de Tenant sem Senha
 
-Pesquisa técnica revisada em 2026-10-07. Dependências são fixadas por `pnpm-lock.yaml`; imagens Docker são fixadas por patch ou digest.
+Pesquisa técnica revisada em 2026-10-07. Dependências são fixadas por `yarn.lock`; imagens Docker são fixadas por patch ou digest.
 
 ## Runtime e framework
 
-**Decisão**: Node.js 24 LTS, NestJS 12, TypeScript 6 em modo estrito, ESM e pnpm 12. Usar o adapter Fastify.
+**Decisão**: Node.js 24 LTS, NestJS 12, TypeScript 6 em modo estrito, ESM e Yarn 4. Usar o adapter Fastify.
 
 **Justificativa**: Em 2026-10-07, Node.js 24 é LTS enquanto Node.js 26 ainda está no canal Current. NestJS 12 e seus schematics suportam Node.js 24 atualizado e TypeScript 6. Fastify reduz overhead HTTP sem alterar as fronteiras da aplicação.
 
 **Alternativas consideradas**: Node.js 26 será adotável após promoção a LTS e validação das dependências; Express é mais difundido, mas o projeto não depende de middlewares exclusivos; Node.js 22 continua suportado, porém oferece janela menor para um projeto novo.
 
-**Fontes**: [ciclo de releases do Node.js](https://nodejs.org/en/about/previous-releases), [requisitos do NestJS 12](https://docs.nestjs.com/migration-guide), [NestJS com Fastify](https://docs.nestjs.com/techniques/performance), [pnpm 12](https://pnpm.io/blog/releases/12.8.2)
+**Fontes**: [ciclo de releases do Node.js](https://nodejs.org/en/about/previous-releases), [requisitos do NestJS 12](https://docs.nestjs.com/migration-guide), [NestJS com Fastify](https://docs.nestjs.com/techniques/performance), [instalação do Yarn](https://yarnpkg.com/getting-started/install)
 
 ## Monólito modular
 

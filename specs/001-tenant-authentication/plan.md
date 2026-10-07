@@ -12,7 +12,7 @@ Implementar cadastro do primeiro administrador e login exclusivamente por OTP en
 
 **Linguagem/Versão**: TypeScript 6.0.x com modo estrito sobre Node.js 24.21.x LTS
 
-**Dependências Principais**: NestJS 12.1.x; Fastify adapter; `@nestjs/config`; Standard Schema/Zod para validação; `pg` para PostgreSQL e transações explícitas; `jose` para JWT RS256; logger JSON nativo do NestJS; OpenTelemetry; cliente HTTP nativo `fetch`; pnpm 12 com lockfile congelado
+**Dependências Principais**: NestJS 12.1.x; Fastify adapter; `@nestjs/config`; Standard Schema/Zod para validação; `pg` para PostgreSQL e transações explícitas; `jose` para JWT RS256; logger JSON nativo do NestJS; OpenTelemetry; cliente HTTP nativo `fetch`; Yarn 4 com lockfile imutável
 
 **Armazenamento**: PostgreSQL 18.6; schema materializado exclusivamente por scripts em `database/schema/*.sql`; scripts operacionais de alteração em `database/releases/<release>/*.sql`, executados explicitamente por `psql`; nenhum ORM, migration runner, `synchronize` ou DDL no startup
 

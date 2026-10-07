@@ -65,12 +65,12 @@ A API e o worker usam a mesma imagem OCI, mas executam como processos separados.
 | Testes                 | Vitest 5                                 |
 | Qualidade              | ESLint 10 e Prettier 3                   |
 | Containers             | Docker e Docker Compose                  |
-| Gerenciador de pacotes | pnpm 12                                  |
+| Gerenciador de pacotes | Yarn 4.18                                |
 
 ## Requisitos
 
 - Node.js `>=24 <25`.
-- pnpm `>=12 <13` — o projeto fixa `pnpm@12.10.1`.
+- Yarn `>=4.18 <5` — o projeto fixa `yarn@4.18.1`.
 - Docker com Docker Compose para PostgreSQL, Mailpit e testes E2E.
 
 ## Início rápido com Docker
@@ -79,8 +79,7 @@ Instale as dependências conforme o lockfile:
 
 ```bash
 corepack enable
-corepack prepare pnpm@12.10.1 --activate
-pnpm install --frozen-lockfile
+yarn install --immutable
 ```
 
 Crie a configuração local:
@@ -148,20 +147,20 @@ O banco deve estar preparado antes da API. Exporte as variáveis de ambiente e, 
 Desenvolvimento com recarga automática:
 
 ```bash
-pnpm start:dev
+yarn start:dev
 ```
 
 Build e execução da API:
 
 ```bash
-pnpm build
-pnpm start:prod
+yarn build
+yarn start:prod
 ```
 
 Execução do worker após o build:
 
 ```bash
-pnpm worker
+yarn worker
 ```
 
 ## API
@@ -206,20 +205,20 @@ docker compose -f compose.e2e.yaml down -v --remove-orphans
 
 | Comando                 | Verificação                                                 |
 | ----------------------- | ----------------------------------------------------------- |
-| `pnpm lint`             | ESLint, ciclos e fronteiras arquiteturais.                  |
-| `pnpm typecheck`        | TypeScript estrito sem emissão.                             |
-| `pnpm build`            | Build NestJS de produção.                                   |
-| `pnpm test:unit`        | Testes unitários e arquiteturais.                           |
-| `pnpm test:contract`    | Compatibilidade com o contrato OpenAPI.                     |
-| `pnpm test:integration` | Integração com PostgreSQL indicado por `DATABASE_URL`.      |
-| `pnpm test:e2e`         | Ambiente PostgreSQL/Mailpit descartável e suíte E2E serial. |
-| `pnpm contract:check`   | Estrutura obrigatória do OpenAPI 3.1.                       |
-| `pnpm schema:check`     | Bootstrap vazio e comparação do snapshot estrutural.        |
-| `pnpm ci:check`         | Todos os gates executados pela CI e pelo pre-commit.        |
+| `yarn lint`             | ESLint, ciclos e fronteiras arquiteturais.                  |
+| `yarn typecheck`        | TypeScript estrito sem emissão.                             |
+| `yarn build`            | Build NestJS de produção.                                   |
+| `yarn test:unit`        | Testes unitários e arquiteturais.                           |
+| `yarn test:contract`    | Compatibilidade com o contrato OpenAPI.                     |
+| `yarn test:integration` | Integração com PostgreSQL indicado por `DATABASE_URL`.      |
+| `yarn test:e2e`         | Ambiente PostgreSQL/Mailpit descartável e suíte E2E serial. |
+| `yarn contract:check`   | Estrutura obrigatória do OpenAPI 3.1.                       |
+| `yarn schema:check`     | Bootstrap vazio e comparação do snapshot estrutural.        |
+| `yarn ci:check`         | Todos os gates executados pela CI e pelo pre-commit.        |
 
 Os testes E2E usam `compose.e2e.yaml`, armazenamento `tmpfs` e teardown com remoção de volumes mesmo quando a suíte falha.
 
-O Husky instala `.husky/pre-commit` durante `pnpm install`. Antes de cada commit, o hook executa `pnpm ci:check`, incluindo as suítes que dependem de Docker.
+O Husky instala `.husky/pre-commit` durante `yarn install`. Antes de cada commit, o hook executa `yarn ci:check`, incluindo as suítes que dependem de Docker.
 
 ## Estrutura do projeto
 

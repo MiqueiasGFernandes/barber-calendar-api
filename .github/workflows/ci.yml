@@ -8,11 +8,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 12.10.1
-          run_install: false
       - uses: actions/setup-node@v5
-        with: { node-version: 24.21.0, cache: pnpm }
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm ci:check
+        with: { node-version: 24.21.0 }
+      - run: corepack enable
+      - run: yarn install --immutable
+      - run: yarn ci:check

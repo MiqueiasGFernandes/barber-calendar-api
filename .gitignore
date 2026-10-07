@@ -11,5 +11,4 @@ Thumbs.db
 *.swp
 .vscode/
 .idea/
-.pnpm-store/
-
+.yarn/install-state.gz

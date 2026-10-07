@@ -18,7 +18,7 @@
 
 **Objetivo**: Criar o workspace NestJS e a estrutura executável do monólito modular.
 
-- [X] T001 Criar `package.json` com scripts `build`, `start:dev`, `start:prod`, `worker`, `lint`, `typecheck`, `test:unit`, `test:integration`, `test:contract` e `test:e2e`, fixar Node.js 24 e pnpm 12 em `package.json` e `.npmrc`.
+- [X] T001 Criar `package.json` com scripts `build`, `start:dev`, `start:prod`, `worker`, `lint`, `typecheck`, `test:unit`, `test:integration`, `test:contract` e `test:e2e`, fixar Node.js 24 e Yarn 4 em `package.json` e `.yarnrc.yml`.
 - [X] T002 Configurar TypeScript 6 ESM estrito, `NodeNext`, `strict`, `noUncheckedIndexedAccess` e `exactOptionalPropertyTypes` em `tsconfig.json`, `tsconfig.build.json` e `nest-cli.json`.
 - [X] T003 [P] Configurar ESLint, Prettier e regras para proibir deep imports/ciclos entre módulos em `eslint.config.mjs` e `.prettierrc.json`.
 - [X] T004 Criar a estrutura inicial NestJS com entrypoints HTTP em `src/main.ts`, composição em `src/app.module.ts`, módulos em `src/modules/` e utilitários mínimos em `src/shared/`.

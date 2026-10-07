@@ -1,10 +1,10 @@
 #!/usr/bin/env sh
 set -eu
 
-pnpm lint
-pnpm typecheck
-pnpm test:unit
-pnpm test:contract
-pnpm contract:check
-pnpm schema:check
-pnpm test:e2e
+yarn lint
+yarn typecheck
+yarn test:unit
+yarn test:contract
+yarn contract:check
+yarn schema:check
+yarn test:e2e
