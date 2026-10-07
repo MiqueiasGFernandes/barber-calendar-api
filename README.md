@@ -264,3 +264,7 @@ O Husky instala `.husky/pre-commit` durante `yarn install`. Antes de cada commit
 ## Contribuição
 
 Antes de enviar uma alteração, execute os testes proporcionais ao risco, lint e type checking. Mudanças estruturais no PostgreSQL devem seguir o checklist de [CONTRIBUTING.md](CONTRIBUTING.md), incluindo scripts explícitos de aplicação, verificação e rollback.
+
+## Licença
+
+Este é um software proprietário e confidencial. Nenhuma permissão de uso, cópia, modificação, distribuição ou exploração comercial é concedida sem autorização prévia e escrita do titular. Consulte a [LICENSE](LICENSE). Componentes de terceiros permanecem sujeitos às suas próprias licenças.
