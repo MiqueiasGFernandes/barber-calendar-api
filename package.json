@@ -20,7 +20,9 @@
     "test:contract": "vitest run --config vitest.contract.config.ts",
     "test:e2e": "sh scripts/test-e2e.sh",
     "contract:check": "sh scripts/check-openapi.sh",
-    "schema:check": "sh scripts/check-schema-drift.sh"
+    "schema:check": "sh scripts/check-schema-drift.sh",
+    "ci:check": "sh scripts/check-ci.sh",
+    "prepare": "node .husky/install.mjs"
   },
   "dependencies": {
     "@fastify/helmet": "13.1.1",
@@ -43,6 +45,7 @@
     "@vitest/coverage-v8": "5.0.3",
     "eslint": "10.12.0",
     "eslint-plugin-import-x": "4.17.1",
+    "husky": "9.1.7",
     "prettier": "3.9.9",
     "typescript": "6.0.3",
     "typescript-eslint": "8.71.1",

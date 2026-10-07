@@ -4,7 +4,15 @@ import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
   {
-    ignores: ['node_modules/', 'dist/', 'build/', 'coverage/', '*.min.js', 'eslint.config.mjs'],
+    ignores: [
+      'node_modules/',
+      'dist/',
+      'build/',
+      'coverage/',
+      '*.min.js',
+      'eslint.config.mjs',
+      '.husky/install.mjs',
+    ],
   },
   eslint.configs.recommended,
   ...tseslint.configs.strictTypeChecked,

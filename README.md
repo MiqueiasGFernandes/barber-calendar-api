@@ -215,8 +215,11 @@ docker compose -f compose.e2e.yaml down -v --remove-orphans
 | `pnpm test:e2e`         | Ambiente PostgreSQL/Mailpit descartável e suíte E2E serial. |
 | `pnpm contract:check`   | Estrutura obrigatória do OpenAPI 3.1.                       |
 | `pnpm schema:check`     | Bootstrap vazio e comparação do snapshot estrutural.        |
+| `pnpm ci:check`         | Todos os gates executados pela CI e pelo pre-commit.        |
 
 Os testes E2E usam `compose.e2e.yaml`, armazenamento `tmpfs` e teardown com remoção de volumes mesmo quando a suíte falha.
+
+O Husky instala `.husky/pre-commit` durante `pnpm install`. Antes de cada commit, o hook executa `pnpm ci:check`, incluindo as suítes que dependem de Docker.
 
 ## Estrutura do projeto
 

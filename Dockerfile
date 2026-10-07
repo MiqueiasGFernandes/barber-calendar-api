@@ -2,6 +2,7 @@ FROM node:24.21.0-alpine AS dependencies
 RUN corepack enable && corepack prepare pnpm@12.10.1 --activate
 WORKDIR /app
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY .husky ./.husky
 RUN pnpm install --frozen-lockfile
 
 FROM dependencies AS build
