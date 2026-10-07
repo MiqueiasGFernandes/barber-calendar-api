@@ -1,21 +1,16 @@
 <!--
-Sync Impact Report
-- Version change: scaffold (unversioned) -> 1.0.0
-- Modified principles:
-  - Template placeholder -> I. Isolamento Multi-Tenant
-  - Template placeholder -> II. Integridade da Agenda
-  - Template placeholder -> III. Contratos de API Explícitos
-  - Template placeholder -> IV. Segurança e Privacidade por Padrão
-  - Template placeholder -> V. Qualidade Verificável e Observabilidade
-- Added sections:
-  - Restrições de Domínio
-  - Fluxo de Desenvolvimento e Qualidade
-- Removed sections: none
-- Follow-up TODOs: none
+Relatório de Impacto da Sincronização
+- Alteração de versão: 1.0.0 -> 1.1.0
+- Princípios modificados: nenhum
+- Seção ampliada:
+  - Fluxo de Desenvolvimento e Qualidade -> idioma obrigatório da documentação SDD
+- Seções adicionadas: nenhuma
+- Seções removidas: nenhuma
+- Pendências: nenhuma
 -->
-# Barber Calendar API Constitution
+# Constituição da Barber Calendar API
 
-## Core Principles
+## Princípios Fundamentais
 
 ### I. Isolamento Multi-Tenant
 Toda informação pertencente a uma barbearia DEVE carregar uma identificação inequívoca do
@@ -81,7 +76,13 @@ concorrentes aplicáveis. Exceções a estes princípios exigem justificativa es
 risco, responsável e prazo de correção; conveniência ou urgência isoladamente não constituem
 justificativa.
 
-## Governance
+Toda documentação do fluxo SDD — incluindo constituição, especificações, planos, pesquisas,
+modelos de dados, guias de início rápido, checklists e listas de tarefas — DEVE ser redigida em
+português. Identificadores de código, nomes de arquivos, paths, termos de protocolo, nomes próprios
+de tecnologias e siglas técnicas podem permanecer em sua forma original quando a tradução reduzir
+precisão ou compatibilidade com ferramentas.
+
+## Governança
 
 Esta constituição prevalece sobre práticas, convenções e documentos conflitantes do projeto. Toda
 emenda DEVE ser proposta por escrito, explicar motivação e impacto, identificar eventual migração
@@ -95,4 +96,4 @@ princípios aplicáveis. Revisores DEVEM bloquear mudanças que violem regras ob
 exceção formal. A constituição DEVE ser revisada sempre que o modelo de tenancy, autorização ou
 agendamento mudar e, no mínimo, antes de cada entrega relevante.
 
-**Version**: 1.0.0 | **Ratified**: 2026-09-28 | **Last Amended**: 2026-09-28
+**Versão**: 1.1.0 | **Ratificada em**: 2026-09-28 | **Última Emenda**: 2026-10-07
