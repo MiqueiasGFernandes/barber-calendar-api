@@ -18,15 +18,15 @@
 
 **Objetivo**: Criar o workspace NestJS e a estrutura executável do monólito modular.
 
-- [ ] T001 Criar `package.json` com scripts `build`, `start:dev`, `start:prod`, `worker`, `lint`, `typecheck`, `test:unit`, `test:integration`, `test:contract` e `test:e2e`, fixar Node.js 24 e pnpm 12 em `package.json` e `.npmrc`.
-- [ ] T002 Configurar TypeScript 6 ESM estrito, `NodeNext`, `strict`, `noUncheckedIndexedAccess` e `exactOptionalPropertyTypes` em `tsconfig.json`, `tsconfig.build.json` e `nest-cli.json`.
-- [ ] T003 [P] Configurar ESLint, Prettier e regras para proibir deep imports/ciclos entre módulos em `eslint.config.mjs` e `.prettierrc.json`.
-- [ ] T004 Criar a estrutura inicial NestJS com entrypoints HTTP em `src/main.ts`, composição em `src/app.module.ts`, módulos em `src/modules/` e utilitários mínimos em `src/shared/`.
-- [ ] T005 Configurar Vitest, cobertura e projetos separados para unitário, integração, contrato e E2E em `vitest.config.ts`, `vitest.integration.config.ts`, `vitest.contract.config.ts` e `vitest.e2e.config.ts`.
-- [ ] T006 Criar Dockerfile multiestágio Node.js 24, usuário não-root e `.dockerignore` em `Dockerfile` e `.dockerignore`.
-- [ ] T007 [P] Criar Compose de desenvolvimento para PostgreSQL 18.6 e Mailpit, healthchecks e redes privadas em `compose.yaml`.
-- [ ] T008 Criar Compose E2E isolado com PostgreSQL 18.6 em `compose.e2e.yaml`, armazenamento efêmero, project name parametrizável, bootstrap SQL read-only e healthcheck condicionado a `app_meta.schema_build`.
-- [ ] T009 Criar o orquestrador E2E com subida, espera de healthcheck, execução serial da suíte e teardown `down -v --remove-orphans` garantido em `scripts/test-e2e.sh`.
+- [X] T001 Criar `package.json` com scripts `build`, `start:dev`, `start:prod`, `worker`, `lint`, `typecheck`, `test:unit`, `test:integration`, `test:contract` e `test:e2e`, fixar Node.js 24 e pnpm 12 em `package.json` e `.npmrc`.
+- [X] T002 Configurar TypeScript 6 ESM estrito, `NodeNext`, `strict`, `noUncheckedIndexedAccess` e `exactOptionalPropertyTypes` em `tsconfig.json`, `tsconfig.build.json` e `nest-cli.json`.
+- [X] T003 [P] Configurar ESLint, Prettier e regras para proibir deep imports/ciclos entre módulos em `eslint.config.mjs` e `.prettierrc.json`.
+- [X] T004 Criar a estrutura inicial NestJS com entrypoints HTTP em `src/main.ts`, composição em `src/app.module.ts`, módulos em `src/modules/` e utilitários mínimos em `src/shared/`.
+- [X] T005 Configurar Vitest, cobertura e projetos separados para unitário, integração, contrato e E2E em `vitest.config.ts`, `vitest.integration.config.ts`, `vitest.contract.config.ts` e `vitest.e2e.config.ts`.
+- [X] T006 Criar Dockerfile multiestágio Node.js 24, usuário não-root e `.dockerignore` em `Dockerfile` e `.dockerignore`.
+- [X] T007 [P] Criar Compose de desenvolvimento para PostgreSQL 18.6 e Mailpit, healthchecks e redes privadas em `compose.yaml`.
+- [X] T008 Criar Compose E2E isolado com PostgreSQL 18.6 em `compose.e2e.yaml`, armazenamento efêmero, project name parametrizável, bootstrap SQL read-only e healthcheck condicionado a `app_meta.schema_build`.
+- [X] T009 Criar o orquestrador E2E com subida, espera de healthcheck, execução serial da suíte e teardown `down -v --remove-orphans` garantido em `scripts/test-e2e.sh`.
 
 ---
 
@@ -36,22 +36,22 @@
 
 **CRÍTICO**: Nenhuma história começa antes desta fase terminar. O runtime não pode executar DDL; o banco E2E deve nascer vazio pelos scripts SQL.
 
-- [ ] T010 Criar `database/init/00-bootstrap.sql` com `ON_ERROR_STOP`, criação do database de teste antes da transação e inclusão explícita, em ordem, dos scripts canônicos em `database/schema/`.
-- [ ] T011 Criar schemas PostgreSQL, extensão UUID necessária, role owner, role runtime sem `CREATE`/`ALTER`/`DROP` e grants DML-only em `database/schema/001_extensions.sql`, `database/schema/010_schemas.sql` e `database/schema/090_grants.sql`.
-- [ ] T012 Criar marcador do snapshot SQL suportado pela aplicação em `database/schema/090_schema_manifest.sql`; readiness deve comparar o valor com a revisão esperada.
-- [ ] T013 Criar assertions SQL para schemas, objetos e grants essenciais em `database/verify/assertions.sql`.
-- [ ] T014 Criar teste que inicia PostgreSQL E2E vazio via Compose, verifica o marcador e executa `database/verify/assertions.sql` em `test/integration/database-bootstrap.spec.ts`.
-- [ ] T015 Criar a abstração de conexão, pool único e `TransactionRunner` que empresta o mesmo `PoolClient` entre BEGIN/COMMIT/ROLLBACK em `src/shared/database/postgres-pool.ts` e `src/shared/database/transaction-runner.ts`.
-- [ ] T016 Criar testes unitários para rollback, liberação do client e propagação de erro transacional em `test/unit/shared/database/transaction-runner.spec.ts`.
-- [ ] T017 Criar módulo de configuração validada no bootstrap para `DATABASE_URL`, `AUTH_SESSION_TTL` (padrão `PT24H`, mínimo `PT15M`, máximo `P7D`) e chaves externas em `src/shared/config/environment.schema.ts` e `src/shared/config/config.module.ts`.
-- [ ] T018 Criar testes para configuração padrão, limites inclusivos e rejeição de duração inválida em `test/unit/shared/config/environment.schema.spec.ts`.
-- [ ] T019 Criar os contratos de aplicação `OtpGenerator`, `OtpDigest`, `EmailSender`, `TokenIssuer`, `TokenVerifier`, `SecurityEventWriter` e `Clock` em `src/shared/application/ports/`.
-- [ ] T020 Implementar adapters de OTP com `node:crypto`, HMAC-SHA-256 versionado e comparação em tempo constante, e de envelope da outbox com AES-256-GCM e chave distinta em `src/shared/infrastructure/crypto/otp-crypto.adapter.ts` e `src/shared/infrastructure/crypto/outbox-crypto.adapter.ts`.
-- [ ] T021 Criar testes unitários de seis dígitos sem viés, HMAC vinculado ao desafio e finalidade, comparação segura e cifra autenticada/versionada em `test/unit/shared/crypto/otp-crypto.adapter.spec.ts` e `test/unit/shared/crypto/outbox-crypto.adapter.spec.ts`.
-- [ ] T022 Configurar logger JSON, correlação por requisição e redaction de headers/campos sensíveis em `src/shared/observability/logger.ts` e `src/main.ts`.
-- [ ] T023 Criar filtro HTTP para Problem Details, correlação e mapeamento uniforme de erros sem revelar elegibilidade em `src/shared/http/problem-details.filter.ts`.
-- [ ] T024 Criar validação request/response do OpenAPI 3.1 em CI e geração de tipos de transporte em `scripts/check-openapi.sh` e `src/shared/http/openapi-types.ts`, usando `specs/001-tenant-authentication/contracts/openapi.yaml` como fonte.
-- [ ] T025 Criar testes ArchUnit-equivalentes por ESLint/import graph para impedir dependências de domínio em NestJS, Fastify, `pg` ou provedores em `test/architecture/module-boundaries.spec.ts`.
+- [X] T010 Criar `database/init/00-bootstrap.sql` com `ON_ERROR_STOP`, criação do database de teste antes da transação e inclusão explícita, em ordem, dos scripts canônicos em `database/schema/`.
+- [X] T011 Criar schemas PostgreSQL, extensão UUID necessária, role owner, role runtime sem `CREATE`/`ALTER`/`DROP` e grants DML-only em `database/schema/001_extensions.sql`, `database/schema/010_schemas.sql` e `database/schema/090_grants.sql`.
+- [X] T012 Criar marcador do snapshot SQL suportado pela aplicação em `database/schema/090_schema_manifest.sql`; readiness deve comparar o valor com a revisão esperada.
+- [X] T013 Criar assertions SQL para schemas, objetos e grants essenciais em `database/verify/assertions.sql`.
+- [X] T014 Criar teste que inicia PostgreSQL E2E vazio via Compose, verifica o marcador e executa `database/verify/assertions.sql` em `test/integration/database-bootstrap.spec.ts`.
+- [X] T015 Criar a abstração de conexão, pool único e `TransactionRunner` que empresta o mesmo `PoolClient` entre BEGIN/COMMIT/ROLLBACK em `src/shared/database/postgres-pool.ts` e `src/shared/database/transaction-runner.ts`.
+- [X] T016 Criar testes unitários para rollback, liberação do client e propagação de erro transacional em `test/unit/shared/database/transaction-runner.spec.ts`.
+- [X] T017 Criar módulo de configuração validada no bootstrap para `DATABASE_URL`, `AUTH_SESSION_TTL` (padrão `PT24H`, mínimo `PT15M`, máximo `P7D`) e chaves externas em `src/shared/config/environment.schema.ts` e `src/shared/config/config.module.ts`.
+- [X] T018 Criar testes para configuração padrão, limites inclusivos e rejeição de duração inválida em `test/unit/shared/config/environment.schema.spec.ts`.
+- [X] T019 Criar os contratos de aplicação `OtpGenerator`, `OtpDigest`, `EmailSender`, `TokenIssuer`, `TokenVerifier`, `SecurityEventWriter` e `Clock` em `src/shared/application/ports/`.
+- [X] T020 Implementar adapters de OTP com `node:crypto`, HMAC-SHA-256 versionado e comparação em tempo constante, e de envelope da outbox com AES-256-GCM e chave distinta em `src/shared/infrastructure/crypto/otp-crypto.adapter.ts` e `src/shared/infrastructure/crypto/outbox-crypto.adapter.ts`.
+- [X] T021 Criar testes unitários de seis dígitos sem viés, HMAC vinculado ao desafio e finalidade, comparação segura e cifra autenticada/versionada em `test/unit/shared/crypto/otp-crypto.adapter.spec.ts` e `test/unit/shared/crypto/outbox-crypto.adapter.spec.ts`.
+- [X] T022 Configurar logger JSON, correlação por requisição e redaction de headers/campos sensíveis em `src/shared/observability/logger.ts` e `src/main.ts`.
+- [X] T023 Criar filtro HTTP para Problem Details, correlação e mapeamento uniforme de erros sem revelar elegibilidade em `src/shared/http/problem-details.filter.ts`.
+- [X] T024 Criar validação request/response do OpenAPI 3.1 em CI e geração de tipos de transporte em `scripts/check-openapi.sh` e `src/shared/http/openapi-types.ts`, usando `specs/001-tenant-authentication/contracts/openapi.yaml` como fonte.
+- [X] T025 Criar testes ArchUnit-equivalentes por ESLint/import graph para impedir dependências de domínio em NestJS, Fastify, `pg` ou provedores em `test/architecture/module-boundaries.spec.ts`.
 
 **Ponto de verificação**: Bootstrap SQL comprovado em banco vazio; role runtime sem DDL; API e worker compilam; configuração e portas comuns testadas; fronteiras entre módulos verificadas.
 
@@ -67,29 +67,29 @@
 
 > Escreva e execute estes testes antes da implementação; confirme a falha esperada.
 
-- [ ] T026 [P] [US1] Criar testes de contrato para `POST /v1/tenants/register` e `POST /v1/auth/otp-verifications` em `test/contract/registration.contract.spec.ts`, cobrindo schemas OpenAPI, status, headers e Problem Details.
-- [ ] T027 [P] [US1] Criar testes E2E do cadastro provisório, verificação válida, OTP inválido e ausência de estado parcial em `test/e2e/registration.e2e-spec.ts`.
-- [ ] T028 [P] [US1] Criar teste de concorrência com 100 confirmações do mesmo e-mail/slug e uma única criação definitiva em `test/integration/registration-concurrency.spec.ts`.
-- [ ] T029 [P] [US1] Criar teste de integração que inspeciona entidades após iniciar cadastro e confirma que somente Tentativa, Desafio, Outbox e Evento existem em `test/integration/registration-provisional-state.spec.ts`.
+- [X] T026 [P] [US1] Criar testes de contrato para `POST /v1/tenants/register` e `POST /v1/auth/otp-verifications` em `test/contract/registration.contract.spec.ts`, cobrindo schemas OpenAPI, status, headers e Problem Details.
+- [X] T027 [P] [US1] Criar testes E2E do cadastro provisório, verificação válida, OTP inválido e ausência de estado parcial em `test/e2e/registration.e2e-spec.ts`.
+- [X] T028 [P] [US1] Criar teste de concorrência com 100 confirmações do mesmo e-mail/slug e uma única criação definitiva em `test/integration/registration-concurrency.spec.ts`.
+- [X] T029 [P] [US1] Criar teste de integração que inspeciona entidades após iniciar cadastro e confirma que somente Tentativa, Desafio, Outbox e Evento existem em `test/integration/registration-provisional-state.spec.ts`.
 
 ### Implementação da História 1
 
-- [ ] T030 [US1] Criar tabelas SQL de Tenant e Conta: nome do tenant “1–160 caracteres”, slug “globalmente única, 3–80 caracteres”, e-mail normalizado “globalmente única”, conta “nasce após verificação” e status conforme `data-model.md` em `database/schema/020_tables.sql` e `database/schema/030_constraints.sql`.
-- [ ] T031 [US1] Criar tabelas SQL de Tentativa de Cadastro, Desafio OTP, Outbox e Evento de Segurança com status/referências exigidos e `code_digest bytea` de 32 bytes em `database/schema/020_tables.sql` e `database/schema/030_constraints.sql`.
-- [ ] T032 [US1] Criar tabelas SQL de Vínculo e Sessão: `(tenant_id, user_id)` único, `jti` único e `expires_at > issued_at`; papel `administrator|member`; sessão `active|expired|revoked` em `database/schema/020_tables.sql` e `database/schema/030_constraints.sql`.
-- [ ] T033 [US1] Criar índices únicos, parciais e de busca necessários para identidade normalizada, slug e desafio `status = 'pending'`, sem predicado temporal baseado em `now()`, em `database/schema/040_indexes.sql`.
-- [ ] T034 [US1] Atualizar fixture de E2E com usuário runtime DML-only e estado inicial vazio/reproduzível em `database/tests/fixtures/registration.sql`.
-- [ ] T035 [US1] Implementar entidades/regras de domínio para Tentativa de Cadastro e transições permitidas em `src/modules/authentication/domain/registration-attempt.ts` e `src/modules/authentication/domain/otp-challenge.ts`.
-- [ ] T036 [US1] Implementar repositórios SQL parametrizados para Tentativa, Tenant, Conta, Vínculo, Desafio, Sessão e Evento em `src/modules/authentication/infrastructure/persistence/registration.repository.ts` e `src/modules/tenancy/infrastructure/persistence/tenant.repository.ts`.
-- [ ] T037 [US1] Implementar caso de uso de cadastro provisório que normaliza e-mail, aplica validação, cria Tentativa/Desafio/Outbox/Evento na mesma transação e não cria Tenant/Conta/Vínculo em `src/modules/authentication/application/use-cases/start-registration.use-case.ts`.
-- [ ] T038 [US1] Implementar caso de uso de verificação de cadastro que bloqueia e consome o Desafio, cria Tenant/Conta/Vínculo/Sessão/Evento na mesma transação e emite JWT somente após commit em `src/modules/authentication/application/use-cases/verify-registration-otp.use-case.ts`.
-- [ ] T039 [US1] Implementar endpoints e DTOs de registro/verificação com validação estrita e mapeamento fiel ao OpenAPI em `src/modules/authentication/infrastructure/http/registration.controller.ts` e `src/modules/authentication/infrastructure/http/dto/`.
-- [ ] T040 [US1] Implementar emissão e validação JWT RS256 com `kid`, `iss`, `aud`, `sub`, `sid`, `jti`, `tenant_id`, `membership_id`, `role`, `iat` e `exp = expires_at` em `src/modules/authentication/infrastructure/token/jwt-token.adapter.ts`.
-- [ ] T041 [US1] Implementar worker Nest standalone que reivindica outbox com `FOR UPDATE SKIP LOCKED`, valida desafio pendente, envia fora da transação, aplica retry/backoff e expurga ciphertext terminal em `src/worker.ts` e `src/modules/outbox/infrastructure/outbox-dispatcher.ts`.
-- [ ] T042 [US1] Implementar adapter Brevo REST e adapter SMTP para Mailpit atrás de `EmailSender`, com idempotency key igual ao ID da outbox e sem logging do payload em `src/modules/notifications/infrastructure/email/brevo-email-sender.ts` e `src/modules/notifications/infrastructure/email/mailpit-email-sender.ts`.
-- [ ] T043 [US1] Criar teste E2E de entrega via Mailpit, falha transitória, desafio expirado/substituído e expurgo do envelope em `test/e2e/outbox-delivery.e2e-spec.ts`.
-- [ ] T044 [US1] Implementar guard JWT que busca Sessão, Conta, Tenant e Vínculo ativos no PostgreSQL antes de autorizar, sem confiar apenas nas claims em `src/modules/authentication/infrastructure/http/tenant-session.guard.ts`.
-- [ ] T045 [US1] Atualizar assertions de schema para todas as tabelas/constraints introduzidas por US1 em `database/verify/assertions.sql`.
+- [X] T030 [US1] Criar tabelas SQL de Tenant e Conta: nome do tenant “1–160 caracteres”, slug “globalmente única, 3–80 caracteres”, e-mail normalizado “globalmente única”, conta “nasce após verificação” e status conforme `data-model.md` em `database/schema/020_tables.sql` e `database/schema/030_constraints.sql`.
+- [X] T031 [US1] Criar tabelas SQL de Tentativa de Cadastro, Desafio OTP, Outbox e Evento de Segurança com status/referências exigidos e `code_digest bytea` de 32 bytes em `database/schema/020_tables.sql` e `database/schema/030_constraints.sql`.
+- [X] T032 [US1] Criar tabelas SQL de Vínculo e Sessão: `(tenant_id, user_id)` único, `jti` único e `expires_at > issued_at`; papel `administrator|member`; sessão `active|expired|revoked` em `database/schema/020_tables.sql` e `database/schema/030_constraints.sql`.
+- [X] T033 [US1] Criar índices únicos, parciais e de busca necessários para identidade normalizada, slug e desafio `status = 'pending'`, sem predicado temporal baseado em `now()`, em `database/schema/040_indexes.sql`.
+- [X] T034 [US1] Atualizar fixture de E2E com usuário runtime DML-only e estado inicial vazio/reproduzível em `database/tests/fixtures/registration.sql`.
+- [X] T035 [US1] Implementar entidades/regras de domínio para Tentativa de Cadastro e transições permitidas em `src/modules/authentication/domain/registration-attempt.ts` e `src/modules/authentication/domain/otp-challenge.ts`.
+- [X] T036 [US1] Implementar repositórios SQL parametrizados para Tentativa, Tenant, Conta, Vínculo, Desafio, Sessão e Evento em `src/modules/authentication/infrastructure/persistence/registration.repository.ts` e `src/modules/tenancy/infrastructure/persistence/tenant.repository.ts`.
+- [X] T037 [US1] Implementar caso de uso de cadastro provisório que normaliza e-mail, aplica validação, cria Tentativa/Desafio/Outbox/Evento na mesma transação e não cria Tenant/Conta/Vínculo em `src/modules/authentication/application/use-cases/start-registration.use-case.ts`.
+- [X] T038 [US1] Implementar caso de uso de verificação de cadastro que bloqueia e consome o Desafio, cria Tenant/Conta/Vínculo/Sessão/Evento na mesma transação e emite JWT somente após commit em `src/modules/authentication/application/use-cases/verify-registration-otp.use-case.ts`.
+- [X] T039 [US1] Implementar endpoints e DTOs de registro/verificação com validação estrita e mapeamento fiel ao OpenAPI em `src/modules/authentication/infrastructure/http/registration.controller.ts` e `src/modules/authentication/infrastructure/http/dto/`.
+- [X] T040 [US1] Implementar emissão e validação JWT RS256 com `kid`, `iss`, `aud`, `sub`, `sid`, `jti`, `tenant_id`, `membership_id`, `role`, `iat` e `exp = expires_at` em `src/modules/authentication/infrastructure/token/jwt-token.adapter.ts`.
+- [X] T041 [US1] Implementar worker Nest standalone que reivindica outbox com `FOR UPDATE SKIP LOCKED`, valida desafio pendente, envia fora da transação, aplica retry/backoff e expurga ciphertext terminal em `src/worker.ts` e `src/modules/outbox/infrastructure/outbox-dispatcher.ts`.
+- [X] T042 [US1] Implementar adapter Brevo REST e adapter SMTP para Mailpit atrás de `EmailSender`, com idempotency key igual ao ID da outbox e sem logging do payload em `src/modules/notifications/infrastructure/email/brevo-email-sender.ts` e `src/modules/notifications/infrastructure/email/mailpit-email-sender.ts`.
+- [X] T043 [US1] Criar teste E2E de entrega via Mailpit, falha transitória, desafio expirado/substituído e expurgo do envelope em `test/e2e/outbox-delivery.e2e-spec.ts`.
+- [X] T044 [US1] Implementar guard JWT que busca Sessão, Conta, Tenant e Vínculo ativos no PostgreSQL antes de autorizar, sem confiar apenas nas claims em `src/modules/authentication/infrastructure/http/tenant-session.guard.ts`.
+- [X] T045 [US1] Atualizar assertions de schema para todas as tabelas/constraints introduzidas por US1 em `database/verify/assertions.sql`.
 
 **Ponto de verificação**: História 1 executa por HTTP e Mailpit; a confirmação é atômica; corrida cria exatamente um cadastro; nenhum token é emitido em falha.
 
@@ -105,20 +105,20 @@
 
 > Escreva e execute estes testes antes da implementação; confirme a falha esperada.
 
-- [ ] T046 [P] [US2] Criar testes de contrato para solicitação e verificação de OTP de login, enumeração e sessão em `test/contract/login-otp.contract.spec.ts`.
-- [ ] T047 [P] [US2] Criar testes E2E para login ativo, resposta equivalente para identidade inelegível, tenant cruzado e conta/tenant/vínculo suspenso em `test/e2e/login-otp.e2e-spec.ts`.
-- [ ] T048 [P] [US2] Criar testes unitários para configuração `AUTH_SESSION_TTL` padrão `PT24H`, limites inclusivos `PT15M..P7D`, rejeição de valores fora da faixa, `exp` imutável e sessões paralelas em `test/unit/authentication/session-lifetime.spec.ts`.
+- [X] T046 [P] [US2] Criar testes de contrato para solicitação e verificação de OTP de login, enumeração e sessão em `test/contract/login-otp.contract.spec.ts`.
+- [X] T047 [P] [US2] Criar testes E2E para login ativo, resposta equivalente para identidade inelegível, tenant cruzado e conta/tenant/vínculo suspenso em `test/e2e/login-otp.e2e-spec.ts`.
+- [X] T048 [P] [US2] Criar testes unitários para configuração `AUTH_SESSION_TTL` padrão `PT24H`, limites inclusivos `PT15M..P7D`, rejeição de valores fora da faixa, `exp` imutável e sessões paralelas em `test/unit/authentication/session-lifetime.spec.ts`.
 
 ### Implementação da História 2
 
-- [ ] T049 [US2] Implementar caso de uso de solicitação de OTP que resolve tenant/e-mail/vínculo ativos, substitui desafio pendente e grava Desafio/Outbox/Evento na mesma transação em `src/modules/authentication/application/use-cases/request-login-otp.use-case.ts`.
-- [ ] T050 [US2] Implementar trabalho equivalente para identidades inelegíveis, retornando `202` idêntico sem código utilizável e sem revelar a condição em `src/modules/authentication/application/use-cases/request-login-otp.use-case.ts` e `src/modules/authentication/infrastructure/http/otp-request.controller.ts`.
-- [ ] T051 [US2] Implementar verificação de OTP de login com lock do desafio, revalidação de Conta/Tenant/Vínculo e criação de sessão sem invalidar sessões anteriores em `src/modules/authentication/application/use-cases/verify-login-otp.use-case.ts`.
-- [ ] T052 [US2] Implementar `POST /v1/auth/otp-requests` e integrar `POST /v1/auth/otp-verifications` com o contrato em `src/modules/authentication/infrastructure/http/otp-request.controller.ts` e `src/modules/authentication/infrastructure/http/otp-verification.controller.ts`.
-- [ ] T053 [US2] Criar scripts SQL manuais de alteração incremental para índices/constraints de lookup de login e sessão em `database/releases/001-login-otp/up.sql`, com verificação em `database/releases/001-login-otp/verify.sql` e rollback em `database/releases/001-login-otp/rollback.sql`.
-- [ ] T054 [US2] Atualizar snapshot canônico para banco novo com as alterações de login em `database/schema/020_tables.sql`, `database/schema/030_constraints.sql`, `database/schema/040_indexes.sql` e `database/schema/090_schema_manifest.sql`.
-- [ ] T055 [US2] Criar testes de integração para login concorrente do mesmo OTP (um token), sessões simultâneas preservadas e revalidação imediata após suspensão/inativação em `test/integration/login-session-concurrency.spec.ts` e `test/integration/tenant-session-authorization.spec.ts`.
-- [ ] T056 [US2] Atualizar assertions de schema para tabelas/índices de login e sessão em `database/verify/assertions.sql`.
+- [X] T049 [US2] Implementar caso de uso de solicitação de OTP que resolve tenant/e-mail/vínculo ativos, substitui desafio pendente e grava Desafio/Outbox/Evento na mesma transação em `src/modules/authentication/application/use-cases/request-login-otp.use-case.ts`.
+- [X] T050 [US2] Implementar trabalho equivalente para identidades inelegíveis, retornando `202` idêntico sem código utilizável e sem revelar a condição em `src/modules/authentication/application/use-cases/request-login-otp.use-case.ts` e `src/modules/authentication/infrastructure/http/otp-request.controller.ts`.
+- [X] T051 [US2] Implementar verificação de OTP de login com lock do desafio, revalidação de Conta/Tenant/Vínculo e criação de sessão sem invalidar sessões anteriores em `src/modules/authentication/application/use-cases/verify-login-otp.use-case.ts`.
+- [X] T052 [US2] Implementar `POST /v1/auth/otp-requests` e integrar `POST /v1/auth/otp-verifications` com o contrato em `src/modules/authentication/infrastructure/http/otp-request.controller.ts` e `src/modules/authentication/infrastructure/http/otp-verification.controller.ts`.
+- [X] T053 [US2] Criar scripts SQL manuais de alteração incremental para índices/constraints de lookup de login e sessão em `database/releases/001-login-otp/up.sql`, com verificação em `database/releases/001-login-otp/verify.sql` e rollback em `database/releases/001-login-otp/rollback.sql`.
+- [X] T054 [US2] Atualizar snapshot canônico para banco novo com as alterações de login em `database/schema/020_tables.sql`, `database/schema/030_constraints.sql`, `database/schema/040_indexes.sql` e `database/schema/090_schema_manifest.sql`.
+- [X] T055 [US2] Criar testes de integração para login concorrente do mesmo OTP (um token), sessões simultâneas preservadas e revalidação imediata após suspensão/inativação em `test/integration/login-session-concurrency.spec.ts` e `test/integration/tenant-session-authorization.spec.ts`.
+- [X] T056 [US2] Atualizar assertions de schema para tabelas/índices de login e sessão em `database/verify/assertions.sql`.
 
 **Ponto de verificação**: História 2 funciona sem depender de cadastro no mesmo caso de teste (seed SQL de membro ativo); identidades inelegíveis não recebem OTP utilizável; sessões anteriores permanecem válidas até suas próprias expirações.
 
@@ -134,20 +134,20 @@
 
 > Escreva e execute estes testes antes da implementação; confirme a falha esperada.
 
-- [ ] T057 [P] [US3] Criar testes unitários para contagem de falhas por desafio e política de janela móvel em `test/unit/authentication/otp-throttle-policy.spec.ts`.
-- [ ] T058 [P] [US3] Criar testes E2E para intervalo de reenvio de 60 segundos, limites 5/e-mail e 20/IP por 15 minutos, limites 10/e-mail e 50/IP por hora e `Retry-After` em `test/e2e/otp-throttling.e2e-spec.ts`.
-- [ ] T059 [P] [US3] Criar teste de integração concorrente nas fronteiras das janelas móveis para provar ausência de burst e reinício de contador em `test/integration/otp-throttle-concurrency.spec.ts`.
+- [X] T057 [P] [US3] Criar testes unitários para contagem de falhas por desafio e política de janela móvel em `test/unit/authentication/otp-throttle-policy.spec.ts`.
+- [X] T058 [P] [US3] Criar testes E2E para intervalo de reenvio de 60 segundos, limites 5/e-mail e 20/IP por 15 minutos, limites 10/e-mail e 50/IP por hora e `Retry-After` em `test/e2e/otp-throttling.e2e-spec.ts`.
+- [X] T059 [P] [US3] Criar teste de integração concorrente nas fronteiras das janelas móveis para provar ausência de burst e reinício de contador em `test/integration/otp-throttle-concurrency.spec.ts`.
 
 ### Implementação da História 3
 
-- [ ] T060 [US3] Criar tabelas SQL `identity.throttle_subjects` e `identity.throttle_events`, com digest HMAC `bytea` de 32 bytes e unicidade `(scope_type, scope_digest)` em `database/schema/020_tables.sql` e `database/schema/030_constraints.sql`.
-- [ ] T061 [US3] Criar índices SQL para consultas por `(subject_id, action, occurred_at)` e expurgo das janelas em `database/schema/040_indexes.sql`.
-- [ ] T062 [US3] Implementar repositório de limitação com lock dos sujeitos em ordem determinística, contagem de janela móvel e gravação atômica dos eventos em `src/modules/authentication/infrastructure/persistence/throttle.repository.ts`.
-- [ ] T063 [US3] Integrar limites de cadastro/solicitação por e-mail e IP e de falha de verificação entre desafios em `src/modules/authentication/application/services/otp-throttle.service.ts` e `src/modules/authentication/application/use-cases/`.
-- [ ] T064 [US3] Implementar respostas `429` uniformes com `Retry-After` sem identificar qual escopo foi limitado em `src/shared/http/problem-details.filter.ts` e `src/modules/authentication/infrastructure/http/otp-request.controller.ts`.
-- [ ] T065 [US3] Implementar rotina de expurgo de eventos de limitação anteriores à maior janela mais margem, sem DDL e sem remover eventos ainda contados, em `src/modules/authentication/infrastructure/persistence/throttle-retention.job.ts`.
-- [ ] T066 [US3] Atualizar seed E2E para identidade conhecida, desconhecida e origens controláveis por teste em `database/seeds/e2e.sql`.
-- [ ] T067 [US3] Atualizar assertions do snapshot SQL e versão esperada para rate limiting em `database/verify/assertions.sql` e `database/schema/090_schema_manifest.sql`.
+- [X] T060 [US3] Criar tabelas SQL `identity.throttle_subjects` e `identity.throttle_events`, com digest HMAC `bytea` de 32 bytes e unicidade `(scope_type, scope_digest)` em `database/schema/020_tables.sql` e `database/schema/030_constraints.sql`.
+- [X] T061 [US3] Criar índices SQL para consultas por `(subject_id, action, occurred_at)` e expurgo das janelas em `database/schema/040_indexes.sql`.
+- [X] T062 [US3] Implementar repositório de limitação com lock dos sujeitos em ordem determinística, contagem de janela móvel e gravação atômica dos eventos em `src/modules/authentication/infrastructure/persistence/throttle.repository.ts`.
+- [X] T063 [US3] Integrar limites de cadastro/solicitação por e-mail e IP e de falha de verificação entre desafios em `src/modules/authentication/application/services/otp-throttle.service.ts` e `src/modules/authentication/application/use-cases/`.
+- [X] T064 [US3] Implementar respostas `429` uniformes com `Retry-After` sem identificar qual escopo foi limitado em `src/shared/http/problem-details.filter.ts` e `src/modules/authentication/infrastructure/http/otp-request.controller.ts`.
+- [X] T065 [US3] Implementar rotina de expurgo de eventos de limitação anteriores à maior janela mais margem, sem DDL e sem remover eventos ainda contados, em `src/modules/authentication/infrastructure/persistence/throttle-retention.job.ts`.
+- [X] T066 [US3] Atualizar seed E2E para identidade conhecida, desconhecida e origens controláveis por teste em `database/seeds/e2e.sql`.
+- [X] T067 [US3] Atualizar assertions do snapshot SQL e versão esperada para rate limiting em `database/verify/assertions.sql` e `database/schema/090_schema_manifest.sql`.
 
 **Ponto de verificação**: Reenvio e limites resistem a concorrência e reemissão; resposta não revela escopo limitado; nenhum novo e-mail é criado quando o limite é excedido.
 
@@ -155,13 +155,13 @@
 
 ## Fase Final: Refinamento e Aspectos Transversais
 
-- [ ] T068 [P] Adicionar revisão automatizada de grants para provar que o usuário runtime não executa DDL em `database/verify/assertions.sql` e `test/integration/database-privileges.spec.ts`.
-- [ ] T069 [P] Adicionar comparação CI de `pg_dump --schema-only` normalizado com o snapshot esperado em `scripts/check-schema-drift.sh` e `.github/workflows/ci.yml`.
-- [ ] T070 Adicionar scripts SQL manuais de release com `up.sql`, `verify.sql` e `rollback.sql` ao checklist de revisão de alterações estruturais em `CONTRIBUTING.md`.
-- [ ] T071 [P] Adicionar métricas de baixa cardinalidade para decisões OTP, limitação, idade/retry/falha terminal da outbox e latência de entrega em `src/shared/observability/metrics.ts`.
-- [ ] T072 [P] Adicionar testes de redação para logs, eventos e traces confirmando ausência de OTP, JWT, e-mail/IP bruto e envelope decriptado em `test/integration/security-redaction.spec.ts`.
-- [ ] T073 Executar todos os comandos e cenários de `specs/001-tenant-authentication/quickstart.md` e corrigir diferenças entre documentação e comportamento em `specs/001-tenant-authentication/quickstart.md`.
-- [ ] T074 Atualizar registro canônico do schema no bootstrap e a documentação de deploy para garantir que `psql` rode antes de API/worker e falhe sem revisão compatível em `database/schema/090_schema_manifest.sql` e `docs/deployment.md`.
+- [X] T068 [P] Adicionar revisão automatizada de grants para provar que o usuário runtime não executa DDL em `database/verify/assertions.sql` e `test/integration/database-privileges.spec.ts`.
+- [X] T069 [P] Adicionar comparação CI de `pg_dump --schema-only` normalizado com o snapshot esperado em `scripts/check-schema-drift.sh` e `.github/workflows/ci.yml`.
+- [X] T070 Adicionar scripts SQL manuais de release com `up.sql`, `verify.sql` e `rollback.sql` ao checklist de revisão de alterações estruturais em `CONTRIBUTING.md`.
+- [X] T071 [P] Adicionar métricas de baixa cardinalidade para decisões OTP, limitação, idade/retry/falha terminal da outbox e latência de entrega em `src/shared/observability/metrics.ts`.
+- [X] T072 [P] Adicionar testes de redação para logs, eventos e traces confirmando ausência de OTP, JWT, e-mail/IP bruto e envelope decriptado em `test/integration/security-redaction.spec.ts`.
+- [X] T073 Executar todos os comandos e cenários de `specs/001-tenant-authentication/quickstart.md` e corrigir diferenças entre documentação e comportamento em `specs/001-tenant-authentication/quickstart.md`.
+- [X] T074 Atualizar registro canônico do schema no bootstrap e a documentação de deploy para garantir que `psql` rode antes de API/worker e falhe sem revisão compatível em `database/schema/090_schema_manifest.sql` e `docs/deployment.md`.
 
 ## Dependências e Ordem
 

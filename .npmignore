@@ -1,0 +1,11 @@
+src/
+test/
+specs/
+database/
+scripts/
+coverage/
+.github/
+compose*.yaml
+*.log
+.env*
+

@@ -4,8 +4,8 @@ Este guia define cenários executáveis para validar cadastro e login por OTP en
 
 ## Pré-requisitos
 
-- Node.js 24 LTS
-- pnpm 12
+- Node.js 24.21.x LTS
+- pnpm 12.10.x
 - Docker com Compose
 - portas locais de API, PostgreSQL E2E e Mailpit disponíveis
 
@@ -35,6 +35,7 @@ pnpm lint
 pnpm typecheck
 pnpm test:unit
 pnpm contract:check
+pnpm schema:check
 ```
 
 Resultado esperado: lint, TypeScript estrito, testes unitários, regras de fronteira entre módulos e contrato OpenAPI passam sem acessar infraestrutura.

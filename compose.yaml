@@ -1,0 +1,38 @@
+name: barber-calendar
+services:
+  db:
+    image: postgres:18.6-alpine
+    environment: { POSTGRES_USER: postgres, POSTGRES_PASSWORD: postgres, POSTGRES_DB: postgres }
+    ports: ['5432:5432']
+    volumes:
+      - barber-db:/var/lib/postgresql
+      - ./database/init/00-bootstrap.sql:/docker-entrypoint-initdb.d/00-bootstrap.sql:ro
+      - ./database:/opt/app-sql:ro
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          'pg_isready -U postgres -d barber_calendar_e2e && psql -U postgres -d barber_calendar_e2e -tAc "SELECT revision=''001-tenant-authentication-v3'' FROM app_meta.schema_build WHERE singleton" | grep -qx t',
+        ]
+      interval: 3s
+      timeout: 5s
+      retries: 30
+    networks: [backend]
+  mailpit:
+    image: axllent/mailpit:v1.27.8
+    ports: ['1025:1025', '8025:8025']
+    networks: [backend]
+  api:
+    build: .
+    env_file: [.env]
+    depends_on: { db: { condition: service_healthy }, mailpit: { condition: service_started } }
+    ports: ['3000:3000']
+    networks: [backend]
+  worker:
+    build: .
+    command: ['node', 'dist/worker.js']
+    env_file: [.env]
+    depends_on: { db: { condition: service_healthy }, mailpit: { condition: service_started } }
+    networks: [backend]
+volumes: { barber-db: {} }
+networks: { backend: { internal: true } }
