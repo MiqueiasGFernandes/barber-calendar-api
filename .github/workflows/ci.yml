@@ -9,7 +9,9 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
-        with: { node-version: 24.21.0 }
+        with:
+          node-version: 24.21.0
+          package-manager-cache: false
       - run: corepack enable
       - run: yarn install --immutable
       - run: yarn ci:check
