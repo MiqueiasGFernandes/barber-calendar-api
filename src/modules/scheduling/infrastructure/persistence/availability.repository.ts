@@ -24,7 +24,7 @@ export class AvailabilityRepository implements AvailabilityPort {
     }
   }
 
-  async loadInTransaction(context: TransactionContext, tenantId: string, serviceId: string, date: string): Promise<AvailabilitySnapshot | null> {
+  async loadInTransaction(context: TransactionContext, tenantId: string, serviceId: string, date: string, excludeAppointmentId?:string): Promise<AvailabilitySnapshot | null> {
     const setting = await context.query<{ time_zone: string; slot_interval_minutes: number; minimum_advance_minutes: number }>(
       `SELECT t.time_zone,s.slot_interval_minutes,s.minimum_advance_minutes FROM scheduling.tenant_settings s
        JOIN tenancy.tenants t ON t.id=s.tenant_id WHERE s.tenant_id=$1`, [tenantId],
@@ -62,8 +62,8 @@ export class AvailabilityRepository implements AvailabilityPort {
         [tenantId, item.professional_id, dayStart, dayEnd],
       );
       const appointments = await context.query<{ starts_at: Date; ends_at: Date }>(
-        "SELECT starts_at,ends_at FROM scheduling.appointments WHERE tenant_id=$1 AND professional_id=$2 AND status='confirmed' AND starts_at<$4 AND ends_at>$3",
-        [tenantId, item.professional_id, dayStart, dayEnd],
+        "SELECT starts_at,ends_at FROM scheduling.appointments WHERE tenant_id=$1 AND professional_id=$2 AND status='confirmed' AND starts_at<$4 AND ends_at>$3 AND ($5::uuid IS NULL OR id<>$5)",
+        [tenantId, item.professional_id, dayStart, dayEnd,excludeAppointmentId??null],
       );
       professionals.push({
         id: item.professional_id,

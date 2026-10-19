@@ -11,7 +11,7 @@ export interface PublicCatalogPort {
 export interface AvailabilitySnapshot { tenantId: string; timeZone: string; slotIntervalMinutes: number; minimumAdvanceMinutes: number; service: PublicService; professionals: AvailabilityProfessional[]; }
 export interface AvailabilityPort {
   load(tenantId: string, serviceId: string, date: string): Promise<AvailabilitySnapshot | null>;
-  loadInTransaction(context: TransactionContext, tenantId: string, serviceId: string, date: string): Promise<AvailabilitySnapshot | null>;
+  loadInTransaction(context: TransactionContext, tenantId: string, serviceId: string, date: string, excludeAppointmentId?:string): Promise<AvailabilitySnapshot | null>;
 }
 
 export interface AppointmentRecord {

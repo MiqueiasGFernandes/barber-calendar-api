@@ -28,6 +28,14 @@ import { MANAGE_CONFIGURATION, ManagementController } from './infrastructure/htt
 import { TenantSessionGuard } from '../authentication/infrastructure/http/tenant-session.guard.js';
 import { ConfigurationConflictRepository } from './infrastructure/persistence/configuration-conflict.repository.js';
 import { ConfigurationConflictService } from './application/services/configuration-conflict.service.js';
+import { AppointmentLifecycleRepository } from './infrastructure/persistence/appointment-lifecycle.repository.js';
+import { AppointmentQueryRepository } from './infrastructure/persistence/appointment-query.repository.js';
+import { AppointmentLifecycleService } from './application/services/appointment-lifecycle.service.js';
+import { ListAppointmentsUseCase } from './application/use-cases/list-appointments.use-case.js';
+import { CancelAppointmentUseCase } from './application/use-cases/cancel-appointment.use-case.js';
+import { RescheduleAppointmentUseCase } from './application/use-cases/reschedule-appointment.use-case.js';
+import { RecordAppointmentOutcomeUseCase } from './application/use-cases/record-appointment-outcome.use-case.js';
+import { AppointmentManagementController } from './infrastructure/http/appointment-management.controller.js';
 
 export const SCHEDULING_TRANSACTION = Symbol('SCHEDULING_TRANSACTION');
 export const IDEMPOTENCY_CIPHER = Symbol('IDEMPOTENCY_CIPHER');
@@ -37,7 +45,7 @@ export const TIME_ZONE_CONVERTER = Symbol('TIME_ZONE_CONVERTER');
 
 @Module({
   imports: [AuthenticationModule],
-  controllers: [PublicCatalogController, PublicAppointmentsController, ManagementController],
+  controllers: [PublicCatalogController, PublicAppointmentsController, ManagementController,AppointmentManagementController],
   providers: [
     AdministratorGuard,
     TenantSessionGuard,
@@ -54,6 +62,13 @@ export const TIME_ZONE_CONVERTER = Symbol('TIME_ZONE_CONVERTER');
     { provide: PublicCatalogRepository, inject: [DATABASE], useFactory: (db:PostgresPool) => new PublicCatalogRepository(db) },
     { provide: AvailabilityRepository, inject: [DATABASE,TIME_ZONE_CONVERTER], useFactory: (db:PostgresPool,zones:IanaTimeZoneAdapter) => new AvailabilityRepository(db,zones) },
     AppointmentRepository,
+    { provide: AppointmentLifecycleRepository, inject:[DATABASE], useFactory: (db:PostgresPool) => new AppointmentLifecycleRepository(db) },
+    { provide: AppointmentQueryRepository, inject: [DATABASE,TIME_ZONE_CONVERTER], useFactory: (db:PostgresPool,zones:IanaTimeZoneAdapter) => new AppointmentQueryRepository(db,zones) },
+    { provide: AppointmentLifecycleService, inject: [IdempotentMutationService,AppointmentLifecycleRepository,AppointmentEventRepository,AvailabilityRepository,TIME_ZONE_CONVERTER], useFactory: (idempotency:IdempotentMutationService,appointments:AppointmentLifecycleRepository,events:AppointmentEventRepository,availability:AvailabilityRepository,zones:IanaTimeZoneAdapter) => new AppointmentLifecycleService(idempotency,appointments,events,availability,zones) },
+    { provide: ListAppointmentsUseCase, inject: [AppointmentQueryRepository], useFactory: (repository:AppointmentQueryRepository) => new ListAppointmentsUseCase(repository) },
+    { provide: CancelAppointmentUseCase, inject: [AppointmentLifecycleService], useFactory: (service:AppointmentLifecycleService) => new CancelAppointmentUseCase(service) },
+    { provide: RescheduleAppointmentUseCase, inject: [AppointmentLifecycleService], useFactory: (service:AppointmentLifecycleService) => new RescheduleAppointmentUseCase(service) },
+    { provide: RecordAppointmentOutcomeUseCase, inject: [AppointmentLifecycleService], useFactory: (service:AppointmentLifecycleService) => new RecordAppointmentOutcomeUseCase(service) },
     { provide: ConfigurationConflictRepository, useFactory: () => new ConfigurationConflictRepository() },
     { provide: ConfigurationConflictService, inject: [ConfigurationConflictRepository], useFactory: (repository:ConfigurationConflictRepository) => new ConfigurationConflictService(repository) },
     { provide: MANAGE_CONFIGURATION, inject: [DATABASE, IdempotentMutationService,TIME_ZONE_CONVERTER,ConfigurationConflictService], useFactory: (db:PostgresPool,mutations:IdempotentMutationService,zones:IanaTimeZoneAdapter,conflicts:ConfigurationConflictService) => new ManageConfigurationUseCases(db,mutations,zones,conflicts) },

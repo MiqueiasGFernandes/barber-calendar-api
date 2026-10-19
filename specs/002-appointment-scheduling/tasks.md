@@ -6,7 +6,7 @@
 
 **Testes**: Obrigatórios pelos cenários da especificação e pela constituição (`.specify/memory/constitution.md`). Em cada incremento, escrever os testes, observar falha pertinente, implementar e refatorar. Não marcar tarefa como concluída apenas por criar um teste ainda falhando.
 
-**Organização**: TypeScript/NestJS/Fastify e PostgreSQL existentes; reaproveitar infraestrutura. Os caminhos abaixo são relativos à raiz. Novos endpoints ficam em `/v1`, preservando autenticação existente. T001–T004, T005–T034 e T035–T048 estão concluídas; as fases posteriores permanecem pendentes.
+**Organização**: TypeScript/NestJS/Fastify e PostgreSQL existentes; reaproveitar infraestrutura. Os caminhos abaixo são relativos à raiz. Novos endpoints ficam em `/v1`, preservando autenticação existente. T001–T058 estão concluídas; a fase final permanece pendente.
 
 ## Formato: `[ID] [P?] [História] Descrição`
 
@@ -146,27 +146,27 @@
 
 ### Testes da História 3
 
-- [ ] T049 [P] [US3] Criar `test/unit/scheduling/appointment-transitions.spec.ts`: somente confirmed → cancelled/attended/no_show, finais imutáveis, reagendamento apenas confirmed, no_show exige agora >= starts_at e attended exige agora >= ends_at, replay não é nova transição; preservar snapshots e intervalo antigo em falha.
+- [X] T049 [P] [US3] Criar `test/unit/scheduling/appointment-transitions.spec.ts`: somente confirmed → cancelled/attended/no_show, finais imutáveis, reagendamento apenas confirmed, no_show exige agora >= starts_at e attended exige agora >= ends_at, replay não é nova transição; preservar snapshots e intervalo antigo em falha.
 
-- [ ] T050 [P] [US3] Criar `test/contract/scheduling-appointments-management.contract.spec.ts` para listAppointments/cancelAppointment/rescheduleAppointment/recordAppointmentOutcome; filtros de período/profissional/estado, segurança, idempotência e erros de transição/conflito segundo OpenAPI.
+- [X] T050 [P] [US3] Criar `test/contract/scheduling-appointments-management.contract.spec.ts` para listAppointments/cancelAppointment/rescheduleAppointment/recordAppointmentOutcome; filtros de período/profissional/estado, segurança, idempotência e erros de transição/conflito segundo OpenAPI.
 
-- [ ] T051 [P] [US3] Criar `test/integration/scheduling/appointment-lifecycle.spec.ts` com cancelamento versus nova reserva, cancelamento versus reagendamento, dois resultados finais concorrentes, replay após mudança de estado e isolamento; provar transição única e eventos atômicos.
+- [X] T051 [P] [US3] Criar `test/integration/scheduling/appointment-lifecycle.spec.ts` com cancelamento versus nova reserva, cancelamento versus reagendamento, dois resultados finais concorrentes, replay após mudança de estado e isolamento; provar transição única e eventos atômicos.
 
-- [ ] T052 [P] [US3] Criar `test/e2e/scheduling-appointment-management.e2e-spec.ts` cobrindo agenda e bloqueios via consulta de exceções, cancelamento, reagendamento, resultados, finais sem reabertura e SC-006 de liberação em até cinco segundos; usar relógio controlado.
+- [X] T052 [P] [US3] Criar `test/e2e/scheduling-appointment-management.e2e-spec.ts` cobrindo agenda e bloqueios via consulta de exceções, cancelamento, reagendamento, resultados, finais sem reabertura e SC-006 de liberação em até cinco segundos; usar relógio controlado.
 
 ### Implementação da História 3
 
-- [ ] T053 [US3] Adicionar transições ao agregado em `src/modules/scheduling/domain/appointment.ts`; exigir confirmed para novo comando, finais imutáveis, no_show desde starts_at e attended desde ends_at; novo agendamento é necessário após finalização, nunca restaurar o anterior.
+- [X] T053 [US3] Adicionar transições ao agregado em `src/modules/scheduling/domain/appointment.ts`; exigir confirmed para novo comando, finais imutáveis, no_show desde starts_at e attended desde ends_at; novo agendamento é necessário após finalização, nunca restaurar o anterior.
 
-- [ ] T054 [US3] Implementar `src/modules/scheduling/application/use-cases/list-appointments.use-case.ts` e `src/modules/scheduling/infrastructure/persistence/appointment-query.repository.ts` com filtros contratuais e escopo administrativo; bloquear ranges inválidos, preservar histórico; bloqueios são consultados pelo endpoint de exceções US2, sem inventar paginação ou campos fora do contrato.
+- [X] T054 [US3] Implementar `src/modules/scheduling/application/use-cases/list-appointments.use-case.ts` e `src/modules/scheduling/infrastructure/persistence/appointment-query.repository.ts` com filtros contratuais e escopo administrativo; bloquear ranges inválidos, preservar histórico; bloqueios são consultados pelo endpoint de exceções US2, sem inventar paginação ou campos fora do contrato.
 
-- [ ] T055 [US3] Implementar cancelamento em `src/modules/scheduling/application/use-cases/cancel-appointment.use-case.ts` e `src/modules/scheduling/infrastructure/persistence/appointment-lifecycle.repository.ts`; protocolo comum, compare-and-set confirmed, evento cancelled e resposta idempotente no mesmo commit, liberar somente após commit.
+- [X] T055 [US3] Implementar cancelamento em `src/modules/scheduling/application/use-cases/cancel-appointment.use-case.ts` e `src/modules/scheduling/infrastructure/persistence/appointment-lifecycle.repository.ts`; protocolo comum, compare-and-set confirmed, evento cancelled e resposta idempotente no mesmo commit, liberar somente após commit.
 
-- [ ] T056 [US3] Implementar reagendamento em `src/modules/scheduling/application/use-cases/reschedule-appointment.use-case.ts` e `src/modules/scheduling/infrastructure/persistence/appointment-lifecycle.repository.ts`; preservar serviço/profissional/snapshots, revalidar grade/antecedência/janela/jornada após lock, ignorar próprio intervalo na colisão; evento anterior/novo e rollback preservam reserva original.
+- [X] T056 [US3] Implementar reagendamento em `src/modules/scheduling/application/use-cases/reschedule-appointment.use-case.ts` e `src/modules/scheduling/infrastructure/persistence/appointment-lifecycle.repository.ts`; preservar serviço/profissional/snapshots, revalidar grade/antecedência/janela/jornada após lock, ignorar próprio intervalo na colisão; evento anterior/novo e rollback preservam reserva original.
 
-- [ ] T057 [US3] Implementar resultado em `src/modules/scheduling/application/use-cases/record-appointment-outcome.use-case.ts` e `src/modules/scheduling/infrastructure/persistence/appointment-lifecycle.repository.ts`; aceitar attended/no_show só de confirmed; exigir agora >= starts_at para no_show e >= ends_at para attended; 409 antes do limiar e nos demais comandos, replay retorna resposta original sem evento adicional.
+- [X] T057 [US3] Implementar resultado em `src/modules/scheduling/application/use-cases/record-appointment-outcome.use-case.ts` e `src/modules/scheduling/infrastructure/persistence/appointment-lifecycle.repository.ts`; aceitar attended/no_show só de confirmed; exigir agora >= starts_at para no_show e >= ends_at para attended; 409 antes do limiar e nos demais comandos, replay retorna resposta original sem evento adicional.
 
-- [ ] T058 [US3] Criar `src/modules/scheduling/infrastructure/http/appointment-management.controller.ts` e `dto/appointment-management.schemas.ts` nesse diretório; registrar quatro rotas no módulo `src/modules/scheduling/scheduling.module.ts`, exigir administrator e chave nas três mutações, executar testes US3.
+- [X] T058 [US3] Criar `src/modules/scheduling/infrastructure/http/appointment-management.controller.ts` e `dto/appointment-management.schemas.ts` nesse diretório; registrar quatro rotas no módulo `src/modules/scheduling/scheduling.module.ts`, exigir administrator e chave nas três mutações, executar testes US3.
 
 ## Fase Final: Refinamento e Aspectos Transversais
 
