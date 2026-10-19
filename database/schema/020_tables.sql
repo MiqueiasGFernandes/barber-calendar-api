@@ -6,6 +6,7 @@ CREATE TABLE app_meta.schema_build (
 
 CREATE TABLE tenancy.tenants (
   id uuid PRIMARY KEY, name text NOT NULL, slug text NOT NULL, status text NOT NULL DEFAULT 'active',
+  time_zone text NOT NULL DEFAULT 'America/Sao_Paulo',
   created_at timestamptz NOT NULL, updated_at timestamptz NOT NULL
 );
 CREATE TABLE identity.user_accounts (
@@ -15,7 +16,7 @@ CREATE TABLE identity.user_accounts (
 CREATE TABLE tenancy.tenant_memberships (
   id uuid PRIMARY KEY, tenant_id uuid NOT NULL, user_id uuid NOT NULL, role text NOT NULL, status text NOT NULL DEFAULT 'active',
   created_at timestamptz NOT NULL, updated_at timestamptz NOT NULL,
-  UNIQUE (tenant_id,id)
+  CONSTRAINT memberships_tenant_id_unique UNIQUE (tenant_id,id)
 );
 CREATE TABLE identity.registration_attempts (
   id uuid PRIMARY KEY, tenant_name text NOT NULL, tenant_slug text NOT NULL, administrator_email text NOT NULL,
@@ -56,7 +57,6 @@ CREATE TABLE scheduling.tenant_settings (
   tenant_id uuid PRIMARY KEY REFERENCES tenancy.tenants(id),
   slot_interval_minutes integer NOT NULL DEFAULT 15 CHECK (slot_interval_minutes > 0),
   minimum_advance_minutes integer NOT NULL DEFAULT 30 CHECK (minimum_advance_minutes >= 0),
-  time_zone text NOT NULL DEFAULT 'America/Sao_Paulo',
   created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
   updated_at timestamptz NOT NULL DEFAULT clock_timestamp()
 );

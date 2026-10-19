@@ -15,6 +15,7 @@ describe.runIf(Boolean(process.env.DATABASE_URL))('scheduling schema', () => {
       expect(defaults.rows[0]).toEqual({ slot_interval_minutes: 15, minimum_advance_minutes: 30 });
       await client.query(`INSERT INTO scheduling.services(id,tenant_id,name,duration_minutes,price_minor,created_at,updated_at) VALUES($1,$2,'Corte',30,5000,now(),now())`, [serviceId, tenantId]);
       await client.query(`INSERT INTO scheduling.professionals(id,tenant_id,name,created_at,updated_at) VALUES($1,$2,'Profissional',now(),now())`, [professionalId, tenantId]);
+      await client.query('INSERT INTO scheduling.professional_services(tenant_id,professional_id,service_id,created_at) VALUES($1,$2,$3,now())', [tenantId, professionalId, serviceId]);
       const appointmentId = randomUUID();
       await client.query(`INSERT INTO scheduling.appointments(id,public_id,tenant_id,professional_id,service_id,starts_at,ends_at,customer_name,customer_phone,customer_email,service_name_snapshot,duration_minutes_snapshot,price_minor_snapshot,currency_snapshot,created_at,updated_at)
         VALUES($1,$2,$3,$4,$5,'2030-01-02T10:00:00Z','2030-01-02T10:30:00Z','Cliente','+5511999999999','client@example.test','Corte',30,5000,'BRL',now(),now())`, [appointmentId, randomUUID(), tenantId, professionalId, serviceId]);

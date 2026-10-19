@@ -10,7 +10,7 @@ BEGIN
   ) AS x(expected) WHERE to_regclass(expected) IS NULL;
   IF missing IS NOT NULL THEN RAISE EXCEPTION 'missing relations: %', missing; END IF;
   SELECT string_agg(expected,', ') INTO missing FROM (VALUES
-    ('tenants_slug_unique'),('users_email_unique'),('memberships_pair_unique'),
+    ('tenants_slug_unique'),('users_email_unique'),('memberships_pair_unique'),('memberships_tenant_id_unique'),('tenants_time_zone_check'),
     ('challenges_digest_check'),('challenges_scope_check'),('sessions_jti_unique'),
     ('sessions_time_check'),('outbox_payload_check'),('throttle_scope_unique'),
     ('throttle_digest_check'),('appointments_confirmed_no_overlap'),('weekly_periods_no_overlap')

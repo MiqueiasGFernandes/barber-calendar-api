@@ -5,15 +5,15 @@ import type { IdempotencyRecordRepository, IdempotencyScope, StoredResponse } fr
 
 export class IdempotentMutationService {
   constructor(private readonly transactions: SchedulingTransaction, private readonly records: IdempotencyRecordRepository, private readonly clock: Clock) {}
-  execute<T>(tenantId: string, scope: IdempotencyScope, request: unknown, mutation: (context: TransactionContext, now: Date) => Promise<{ result: T; response: StoredResponse; appointmentId?: string }>): Promise<T> {
+  execute<T>(tenantId: string, scope: IdempotencyScope, request: unknown, mutation: (context: TransactionContext, now: Date) => Promise<{ result: T; response: StoredResponse; appointmentId?: string }>): Promise<{ value: T; response: StoredResponse; replayed: boolean }> {
     return this.transactions.runForTenant(tenantId, async (context) => {
       const now = this.clock.now();
       await this.records.deleteExpired(context, tenantId, now);
       const existing = await this.records.find(context, scope, request);
-      if (existing) return existing.body as T;
+      if (existing) return { value: existing.body as T, response: existing, replayed: true };
       const performed = await mutation(context, now);
       await this.records.save(context, scope, request, performed.response, now, performed.appointmentId);
-      return performed.result;
+      return { value: performed.result, response: performed.response, replayed: false };
     });
   }
 }

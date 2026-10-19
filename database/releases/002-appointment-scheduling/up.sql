@@ -1,12 +1,18 @@
 \set ON_ERROR_STOP on
 BEGIN;
 CREATE EXTENSION IF NOT EXISTS btree_gist;
+ALTER TABLE tenancy.tenants ADD COLUMN time_zone text NOT NULL DEFAULT 'America/Sao_Paulo';
+ALTER TABLE tenancy.tenants ADD CONSTRAINT tenants_time_zone_check CHECK (length(time_zone) BETWEEN 1 AND 64);
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT FROM pg_constraint WHERE conrelid='tenancy.tenant_memberships'::regclass AND conname='memberships_tenant_id_unique') THEN
+    ALTER TABLE tenancy.tenant_memberships ADD CONSTRAINT memberships_tenant_id_unique UNIQUE (tenant_id,id);
+  END IF;
+END $$;
 CREATE SCHEMA scheduling;
 CREATE TABLE scheduling.tenant_settings (
   tenant_id uuid PRIMARY KEY REFERENCES tenancy.tenants(id),
   slot_interval_minutes integer NOT NULL DEFAULT 15 CHECK (slot_interval_minutes > 0),
   minimum_advance_minutes integer NOT NULL DEFAULT 30 CHECK (minimum_advance_minutes >= 0),
-  time_zone text NOT NULL DEFAULT 'America/Sao_Paulo',
   created_at timestamptz NOT NULL DEFAULT clock_timestamp(),
   updated_at timestamptz NOT NULL DEFAULT clock_timestamp()
 );
@@ -79,7 +85,6 @@ CREATE TABLE scheduling.public_throttle_windows (
   expires_at timestamptz NOT NULL,
   PRIMARY KEY (tenant_id,ip_hash,operation_group,window_start)
 );
-ALTER TABLE scheduling.tenant_settings ADD CONSTRAINT tenant_settings_time_zone_check CHECK (length(time_zone) BETWEEN 1 AND 64);
 ALTER TABLE scheduling.services
   ADD CONSTRAINT services_name_check CHECK (name=btrim(name) AND length(name) BETWEEN 1 AND 120),
   ADD CONSTRAINT services_description_check CHECK (description IS NULL OR length(description)<=1000),
@@ -103,16 +108,21 @@ ALTER TABLE scheduling.appointments
   ADD CONSTRAINT appointments_status_check CHECK (status IN ('confirmed','cancelled','attended','no_show')),
   ADD CONSTRAINT appointments_customer_name_check CHECK (customer_name=btrim(customer_name) AND length(customer_name) BETWEEN 1 AND 160),
   ADD CONSTRAINT appointments_phone_check CHECK (customer_phone ~ '^\+[1-9][0-9]{7,14}$'),
-  ADD CONSTRAINT appointments_email_check CHECK (customer_email=btrim(customer_email) AND length(customer_email)<=254 AND position('@' in customer_email)>1),
-  ADD CONSTRAINT appointments_snapshot_check CHECK (duration_minutes_snapshot BETWEEN 1 AND 480 AND price_minor_snapshot>=0);
+  ADD CONSTRAINT appointments_email_check CHECK (customer_email=lower(btrim(customer_email)) AND length(customer_email)<=254 AND customer_email ~ '^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$'),
+  ADD CONSTRAINT appointments_snapshot_check CHECK (length(service_name_snapshot) BETWEEN 1 AND 120 AND duration_minutes_snapshot BETWEEN 1 AND 480 AND price_minor_snapshot>=0),
+  ADD CONSTRAINT appointments_professional_service_fk FOREIGN KEY (tenant_id,professional_id,service_id) REFERENCES scheduling.professional_services(tenant_id,professional_id,service_id);
 ALTER TABLE scheduling.appointment_events
   ADD CONSTRAINT appointment_events_type_check CHECK (event_type IN ('created','rescheduled','cancelled','attended','no_show')),
   ADD CONSTRAINT appointment_events_status_check CHECK (new_status IN ('confirmed','cancelled','attended','no_show') AND (previous_status IS NULL OR previous_status IN ('confirmed','cancelled','attended','no_show'))),
-  ADD CONSTRAINT appointment_events_actor_check CHECK (event_type='created' OR actor_membership_id IS NOT NULL);
+  ADD CONSTRAINT appointment_events_actor_check CHECK (event_type='created' OR actor_membership_id IS NOT NULL),
+  ADD CONSTRAINT appointment_events_interval_check CHECK (ends_at>starts_at AND (previous_starts_at IS NULL OR previous_ends_at>previous_starts_at)),
+  ADD CONSTRAINT appointment_events_transition_check CHECK ((event_type='created' AND previous_status IS NULL AND new_status='confirmed') OR (event_type='rescheduled' AND previous_status='confirmed' AND new_status='confirmed') OR (event_type='cancelled' AND previous_status='confirmed' AND new_status='cancelled') OR (event_type='attended' AND previous_status='confirmed' AND new_status='attended') OR (event_type='no_show' AND previous_status='confirmed' AND new_status='no_show'));
 ALTER TABLE scheduling.idempotency_records
   ADD CONSTRAINT idempotency_hash_lengths_check CHECK (octet_length(key_hash)=32 AND octet_length(request_hash)=32),
   ADD CONSTRAINT idempotency_expiry_check CHECK (expires_at=created_at+interval '24 hours'),
-  ADD CONSTRAINT idempotency_response_check CHECK (response_status BETWEEN 200 AND 599 AND jsonb_typeof(response_headers)='object');
+  ADD CONSTRAINT idempotency_response_check CHECK (response_status BETWEEN 200 AND 599 AND jsonb_typeof(response_headers)='object'),
+  ADD CONSTRAINT idempotency_actor_scope_check CHECK (actor_scope='public' OR actor_scope ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'),
+  ADD CONSTRAINT idempotency_operation_scope_check CHECK (length(operation) BETWEEN 1 AND 120 AND length(resource_scope) BETWEEN 1 AND 160);
 ALTER TABLE scheduling.public_throttle_windows
   ADD CONSTRAINT public_throttle_ip_hash_check CHECK (octet_length(ip_hash)=32),
   ADD CONSTRAINT public_throttle_group_check CHECK (operation_group IN ('read','booking')),

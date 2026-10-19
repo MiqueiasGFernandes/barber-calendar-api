@@ -10,6 +10,10 @@ export const databaseUrl =
   process.env.DATABASE_URL ??
   'postgres://barber_runtime:missing-test-password@localhost:55432/barber_calendar_e2e';
 export const pool = new Pool({ connectionString: databaseUrl });
+const adminUrl = new URL(databaseUrl);
+adminUrl.username = 'postgres';
+adminUrl.password = process.env.POSTGRES_ADMIN_PASSWORD ?? 'missing-admin-password';
+export const adminPool = new Pool({ connectionString: adminUrl.toString() });
 export const database = new PostgresPool({ connectionString: databaseUrl });
 export const tx = new TransactionRunner(database);
 export class FixedOtp extends CryptoOtpAdapter {
@@ -27,10 +31,10 @@ export const throttle = new OtpThrottleService(
 const testNow = new Date(Date.now() + 86_400_000);
 export const clock = { now: () => new Date(testNow) };
 export async function resetDatabase(): Promise<void> {
-  await pool.query(
-    `DELETE FROM audit.security_events;DELETE FROM scheduling.tenant_settings;DELETE FROM identity.email_outbox;DELETE FROM identity.authenticated_sessions;DELETE FROM identity.otp_challenges;DELETE FROM identity.registration_attempts;DELETE FROM identity.throttle_events;DELETE FROM identity.throttle_subjects;DELETE FROM tenancy.tenant_memberships;DELETE FROM identity.user_accounts;DELETE FROM tenancy.tenants;`,
+  await adminPool.query(
+    `ALTER TABLE scheduling.appointment_events DISABLE TRIGGER USER;DELETE FROM audit.security_events;DELETE FROM scheduling.appointment_events;DELETE FROM scheduling.idempotency_records;DELETE FROM scheduling.appointments;DELETE FROM scheduling.professional_services;DELETE FROM scheduling.availability_exceptions;DELETE FROM scheduling.weekly_periods;DELETE FROM scheduling.professionals;DELETE FROM scheduling.services;DELETE FROM scheduling.tenant_settings;DELETE FROM scheduling.public_throttle_windows;DELETE FROM identity.email_outbox;DELETE FROM identity.authenticated_sessions;DELETE FROM identity.otp_challenges;DELETE FROM identity.registration_attempts;DELETE FROM identity.throttle_events;DELETE FROM identity.throttle_subjects;DELETE FROM tenancy.tenant_memberships;DELETE FROM identity.user_accounts;DELETE FROM tenancy.tenants;ALTER TABLE scheduling.appointment_events ENABLE TRIGGER USER;`,
   );
 }
 export async function closeDatabase(): Promise<void> {
-  await Promise.all([pool.end(), database.close()]);
+  await Promise.all([pool.end(), adminPool.end(), database.close()]);
 }

@@ -9,7 +9,7 @@ export class AvailabilityRepository implements AvailabilityPort {
     const client=await this.database.connect();
     try{
       await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');
-      const setting=await client.query<{time_zone:string;slot_interval_minutes:number;minimum_advance_minutes:number}>(`SELECT time_zone,slot_interval_minutes,minimum_advance_minutes FROM scheduling.tenant_settings WHERE tenant_id=$1`,[tenantId]);
+      const setting=await client.query<{time_zone:string;slot_interval_minutes:number;minimum_advance_minutes:number}>(`SELECT t.time_zone,s.slot_interval_minutes,s.minimum_advance_minutes FROM scheduling.tenant_settings s JOIN tenancy.tenants t ON t.id=s.tenant_id WHERE s.tenant_id=$1`,[tenantId]);
       const config=setting.rows[0]; if(!config){await client.query('COMMIT');return null;}
       const nextDate=new Date(`${date}T00:00:00Z`); nextDate.setUTCDate(nextDate.getUTCDate()+1);
       const dayStart=this.zones.localDateTimeToInstants(`${date}T00:00:00`,config.time_zone)[0]??new Date(`${date}T00:00:00Z`);
