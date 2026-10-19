@@ -1,5 +1,6 @@
 #!/usr/bin/env sh
 set -eu
+node scripts/build-openapi.ts --check
 node --input-type=module -e "import fs from 'node:fs'; import YAML from 'yaml'; const auth=YAML.parse(fs.readFileSync('specs/001-tenant-authentication/contracts/openapi.yaml','utf8')); const scheduling=YAML.parse(fs.readFileSync('specs/002-appointment-scheduling/contracts/openapi.yaml','utf8')); if(auth.openapi!=='3.1.0'||!auth.paths?.['/tenants/register']||!auth.paths?.['/auth/otp-requests']||!auth.paths?.['/auth/otp-verifications']) throw new Error('invalid authentication OpenAPI contract'); if(scheduling.openapi!=='3.1.0'||!Object.keys(scheduling.paths??{}).length) throw new Error('invalid scheduling OpenAPI contract');"
 temporary="$(mktemp -d)"
 trap 'rm -rf "$temporary"' EXIT INT TERM

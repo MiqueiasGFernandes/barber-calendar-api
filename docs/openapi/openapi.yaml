@@ -1,0 +1,1786 @@
+# Gerado por yarn docs:openapi; editar os contratos fonte.
+openapi: 3.1.0
+info:
+  title: Barber Calendar API
+  version: 1.0.0
+  description: "Documentação geral de autenticação por OTP, catálogo público, reservas, gestão da
+    agenda e operação. As rotas de gestão exigem sessão ativa com papel administrator; o tenant é
+    derivado da sessão. Mutações de agendamento exigem Idempotency-Key com retenção de 24 horas. O
+    servidor /v1 é relativo ao host escolhido pelo consumidor; /health e /ready usam a raiz do mesmo
+    host. Artefato gerado: consulte README.md nesta pasta para fontes, exemplos e atualização."
+servers:
+  - url: /v1
+    description: Rotas de negócio no host da API; configure o host da sua implantação na ferramenta cliente
+security: []
+tags:
+  - name: Cadastro
+    description: Cadastro provisório e confirmação do primeiro administrador.
+  - name: Autenticação
+    description: Solicitação e consumo de OTP por e-mail.
+  - name: Disponibilidade Pública
+    description: Catálogo e consulta de horários sem sessão.
+  - name: Agendamentos Públicos
+    description: Reservas de convidados.
+  - name: Gestão
+    description: Configuração e agenda do tenant autorizado; papel administrator obrigatório.
+  - name: Operação
+    description: Verificações do processo e da conexão/revisão do banco.
+paths:
+  /tenants/register:
+    post:
+      operationId: startTenantRegistration
+      summary: Iniciar cadastro provisório e verificar o primeiro administrador por e-mail
+      tags:
+        - Cadastro
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuthenticationTenantRegistrationRequest"
+      responses:
+        "201":
+          description: Tentativa provisória criada; nenhum tenant, conta ou vínculo definitivo existe ainda
+          headers:
+            Location:
+              schema:
+                type: string
+                format: uri-reference
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthenticationRegistrationAttemptResponse"
+        "409":
+          $ref: "#/components/responses/AuthenticationRegistrationConflict"
+        "422":
+          $ref: "#/components/responses/AuthenticationValidationFailure"
+        "429":
+          $ref: "#/components/responses/AuthenticationTooManyRequests"
+      security: []
+  /auth/otp-requests:
+    post:
+      operationId: requestLoginOtp
+      summary: Solicitar um código de login por e-mail
+      description: Retorna a mesma confirmação para identidades conhecidas, desconhecidas, não
+        confirmadas, suspensas e sem vínculo elegível.
+      tags:
+        - Autenticação
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuthenticationOtpRequest"
+      responses:
+        "202":
+          description: Aceito com preservação de privacidade; não garante entrega
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthenticationOtpRequestResponse"
+        "422":
+          $ref: "#/components/responses/AuthenticationValidationFailure"
+        "429":
+          $ref: "#/components/responses/AuthenticationTooManyRequests"
+      security: []
+  /auth/otp-verifications:
+    post:
+      operationId: verifyAuthenticationOtp
+      summary: Consumir OTP de cadastro ou login e criar sessão restrita ao tenant
+      tags:
+        - Autenticação
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AuthenticationOtpVerificationRequest"
+      responses:
+        "200":
+          description: OTP consumido; no cadastro, os registros definitivos foram criados atomicamente antes
+            da emissão do token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthenticationTokenResponse"
+        "401":
+          $ref: "#/components/responses/AuthenticationInvalidOtp"
+        "409":
+          $ref: "#/components/responses/AuthenticationRegistrationConflict"
+        "422":
+          $ref: "#/components/responses/AuthenticationValidationFailure"
+        "429":
+          $ref: "#/components/responses/AuthenticationTooManyRequests"
+      security: []
+  /public/tenants/{tenant_slug}/services:
+    get:
+      operationId: listPublicServices
+      summary: Listar serviços ativos publicados pela barbearia
+      tags:
+        - Disponibilidade Pública
+      parameters:
+        - $ref: "#/components/parameters/SchedulingTenantSlug"
+      responses:
+        "200":
+          description: Serviços ativos e profissionais elegíveis
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - services
+                properties:
+                  services:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/SchedulingPublicService"
+        "404":
+          $ref: "#/components/responses/SchedulingNotFound"
+        "429":
+          $ref: "#/components/responses/SchedulingTooManyRequests"
+      security: []
+  /public/tenants/{tenant_slug}/availability:
+    get:
+      operationId: getPublicAvailability
+      description: Inícios separados por slot_interval_minutes, ancorados no início de cada período de
+        expediente. Exige serviço completo sem conflitos e início igual ou posterior ao instante da
+        consulta mais minimum_advance_minutes; com zero, exige início estritamente futuro. A janela
+        inclui hoje até 30 dias à frente no fuso local.
+      summary: Consultar horários livres para serviço e data
+      tags:
+        - Disponibilidade Pública
+      parameters:
+        - $ref: "#/components/parameters/SchedulingTenantSlug"
+        - name: service_id
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: date
+          in: query
+          required: true
+          description: Data local da barbearia, de hoje até 30 dias corridos à frente, em ISO 8601
+          schema:
+            type: string
+            format: date
+        - name: professional_id
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Inícios candidatos e profissionais elegíveis
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - date
+                  - time_zone
+                  - service
+                  - slots
+                properties:
+                  date:
+                    type: string
+                    format: date
+                  time_zone:
+                    type: string
+                    example: America/Sao_Paulo
+                  service:
+                    $ref: "#/components/schemas/SchedulingPublicService"
+                  slots:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/SchedulingAvailableSlot"
+        "404":
+          $ref: "#/components/responses/SchedulingNotFound"
+        "422":
+          $ref: "#/components/responses/SchedulingValidationFailure"
+        "429":
+          $ref: "#/components/responses/SchedulingTooManyRequests"
+      security: []
+  /public/tenants/{tenant_slug}/appointments:
+    post:
+      operationId: createGuestAppointment
+      description: Revalida atomicamente a grade ancorada em cada período de expediente, a janela de 30
+        dias, a elegibilidade e a disponibilidade integral. No instante da confirmação, exige início
+        igual ou posterior ao instante atual mais minimum_advance_minutes; com zero, somente início
+        estritamente futuro. Uma consulta anterior não garante reserva; rejeição não cria
+        agendamento.
+      summary: Reservar um horário sem criar conta
+      tags:
+        - Agendamentos Públicos
+      parameters:
+        - $ref: "#/components/parameters/SchedulingTenantSlug"
+        - $ref: "#/components/parameters/SchedulingIdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SchedulingGuestAppointmentRequest"
+      responses:
+        "201":
+          description: Horário reservado e confirmado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SchedulingGuestAppointmentResponse"
+        "404":
+          $ref: "#/components/responses/SchedulingNotFound"
+        "409":
+          $ref: "#/components/responses/SchedulingSlotConflict"
+        "422":
+          $ref: "#/components/responses/SchedulingValidationFailure"
+        "429":
+          $ref: "#/components/responses/SchedulingTooManyRequests"
+      security: []
+  /management/scheduling-settings:
+    get:
+      operationId: getSchedulingSettings
+      summary: Consultar intervalo entre inícios e antecedência mínima da barbearia
+      tags:
+        - Gestão
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Configuração do tenant autenticado, incluindo os padrões quando não personalizada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SchedulingSchedulingSettings"
+        "401":
+          $ref: "#/components/responses/SchedulingUnauthorized"
+        "403":
+          $ref: "#/components/responses/SchedulingForbidden"
+    put:
+      operationId: updateSchedulingSettings
+      summary: Configurar intervalo entre inícios e antecedência mínima da barbearia
+      description: Aplica-se a todos os profissionais e serviços; não altera duração de serviços nem
+        agendamentos existentes.
+      tags:
+        - Gestão
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/SchedulingIdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SchedulingSchedulingSettings"
+      responses:
+        "200":
+          description: Configuração atualizada atomicamente
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SchedulingSchedulingSettings"
+        "401":
+          $ref: "#/components/responses/SchedulingUnauthorized"
+        "403":
+          $ref: "#/components/responses/SchedulingForbidden"
+        "409":
+          $ref: "#/components/responses/SchedulingIdempotencyConflict"
+        "422":
+          $ref: "#/components/responses/SchedulingValidationFailure"
+  /management/time-zone:
+    get:
+      operationId: getTenantTimeZone
+      summary: Consultar o fuso horário local da barbearia
+      tags:
+        - Gestão
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Fuso IANA configurado para o tenant autenticado
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - time_zone
+                properties:
+                  time_zone:
+                    type: string
+                    example: America/Sao_Paulo
+        "401":
+          $ref: "#/components/responses/SchedulingUnauthorized"
+        "403":
+          $ref: "#/components/responses/SchedulingForbidden"
+    put:
+      operationId: updateTenantTimeZone
+      description: Preserva os instantes dos agendamentos existentes. Rejeita atomicamente a mudança de
+        fuso se a jornada reinterpretada conflitar com agendamentos confirmados, mantendo a
+        configuração anterior.
+      summary: Configurar o fuso horário local da barbearia
+      tags:
+        - Gestão
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/SchedulingIdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required:
+                - time_zone
+              properties:
+                time_zone:
+                  type: string
+                  example: America/Sao_Paulo
+      responses:
+        "204":
+          description: Fuso atualizado; agendamentos existentes não mudam de instante
+        "401":
+          $ref: "#/components/responses/SchedulingUnauthorized"
+        "403":
+          $ref: "#/components/responses/SchedulingForbidden"
+        "409":
+          $ref: "#/components/responses/SchedulingHasBookings"
+        "422":
+          $ref: "#/components/responses/SchedulingValidationFailure"
+  /management/services:
+    get:
+      operationId: listManagementServices
+      summary: Consultar catálogo de serviços da própria barbearia
+      tags:
+        - Gestão
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Catálogo do tenant autorizado
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - services
+                properties:
+                  services:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/SchedulingManagedService"
+        "401":
+          $ref: "#/components/responses/SchedulingUnauthorized"
+        "403":
+          $ref: "#/components/responses/SchedulingForbidden"
+    post:
+      operationId: createService
+      summary: Cadastrar serviço e profissionais aptos
+      tags:
+        - Gestão
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/SchedulingIdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SchedulingServiceInput"
+      responses:
+        "201":
+          description: Serviço criado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SchedulingManagedService"
+        "401":
+          $ref: "#/components/responses/SchedulingUnauthorized"
+        "403":
+          $ref: "#/components/responses/SchedulingForbidden"
+        "409":
+          $ref: "#/components/responses/SchedulingIdempotencyConflict"
+        "422":
+          $ref: "#/components/responses/SchedulingValidationFailure"
+  /management/services/{service_id}:
+    patch:
+      operationId: updateService
+      description: Mudanças conflitantes com agendamentos confirmados são rejeitadas atomicamente,
+        preservando serviço e compromissos; exige resolução dos conflitos antes de nova tentativa.
+      summary: Atualizar ou desativar serviço
+      tags:
+        - Gestão
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/SchedulingIdempotencyKey"
+        - name: service_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SchedulingServicePatch"
+      responses:
+        "200":
+          description: Serviço atualizado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SchedulingManagedService"
+        "401":
+          $ref: "#/components/responses/SchedulingUnauthorized"
+        "403":
+          $ref: "#/components/responses/SchedulingForbidden"
+        "404":
+          $ref: "#/components/responses/SchedulingNotFound"
+        "409":
+          $ref: "#/components/responses/SchedulingHasBookings"
+        "422":
+          $ref: "#/components/responses/SchedulingValidationFailure"
+  /management/professionals:
+    get:
+      operationId: listProfessionals
+      summary: Consultar profissionais da própria barbearia
+      tags:
+        - Gestão
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Profissionais do tenant autorizado
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - professionals
+                properties:
+                  professionals:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/SchedulingProfessional"
+        "401":
+          $ref: "#/components/responses/SchedulingUnauthorized"
+        "403":
+          $ref: "#/components/responses/SchedulingForbidden"
+    post:
+      operationId: createProfessional
+      summary: Cadastrar profissional
+      tags:
+        - Gestão
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/SchedulingIdempotencyKey"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SchedulingProfessionalInput"
+      responses:
+        "201":
+          description: Profissional criado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SchedulingProfessional"
+        "401":
+          $ref: "#/components/responses/SchedulingUnauthorized"
+        "403":
+          $ref: "#/components/responses/SchedulingForbidden"
+        "409":
+          $ref: "#/components/responses/SchedulingIdempotencyConflict"
+        "422":
+          $ref: "#/components/responses/SchedulingValidationFailure"
+  /management/professionals/{professional_id}:
+    patch:
+      operationId: updateProfessional
+      description: Mudanças de capacidade conflitantes com agendamentos confirmados são rejeitadas
+        atomicamente, preservando profissional e compromissos.
+      summary: Atualizar ou desativar profissional
+      tags:
+        - Gestão
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/SchedulingIdempotencyKey"
+        - name: professional_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SchedulingProfessionalPatch"
+      responses:
+        "200":
+          description: Profissional atualizado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SchedulingProfessional"
+        "401":
+          $ref: "#/components/responses/SchedulingUnauthorized"
+        "403":
+          $ref: "#/components/responses/SchedulingForbidden"
+        "404":
+          $ref: "#/components/responses/SchedulingNotFound"
+        "409":
+          $ref: "#/components/responses/SchedulingHasBookings"
+        "422":
+          $ref: "#/components/responses/SchedulingValidationFailure"
+  /management/professionals/{professional_id}/weekly-periods:
+    get:
+      operationId: getWeeklyWorkPeriods
+      summary: Consultar períodos semanais de trabalho do profissional
+      tags:
+        - Gestão
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: professional_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Jornada semanal do profissional no tenant autorizado
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - periods
+                properties:
+                  periods:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/SchedulingWeeklyWorkPeriodInput"
+        "401":
+          $ref: "#/components/responses/SchedulingUnauthorized"
+        "403":
+          $ref: "#/components/responses/SchedulingForbidden"
+        "404":
+          $ref: "#/components/responses/SchedulingNotFound"
+    put:
+      operationId: replaceWeeklyWorkPeriods
+      description: Rejeita atomicamente toda a substituição se conflitar com agendamentos confirmados,
+        preservando a jornada anterior. O responsável deve cancelar ou reagendar os conflitos antes
+        de nova tentativa.
+      summary: Definir períodos semanais de trabalho do profissional
+      tags:
+        - Gestão
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/SchedulingIdempotencyKey"
+        - name: professional_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required:
+                - periods
+              properties:
+                periods:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/SchedulingWeeklyWorkPeriodInput"
+      responses:
+        "200":
+          description: Jornada semanal substituída
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - periods
+                properties:
+                  periods:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/SchedulingWeeklyWorkPeriodInput"
+        "401":
+          $ref: "#/components/responses/SchedulingUnauthorized"
+        "403":
+          $ref: "#/components/responses/SchedulingForbidden"
+        "404":
+          $ref: "#/components/responses/SchedulingNotFound"
+        "409":
+          $ref: "#/components/responses/SchedulingHasBookings"
+        "422":
+          $ref: "#/components/responses/SchedulingValidationFailure"
+  /management/professionals/{professional_id}/exceptions:
+    get:
+      operationId: listAvailabilityExceptions
+      summary: Consultar pausas, folgas e bloqueios pontuais
+      tags:
+        - Gestão
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: professional_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: starts_from
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date-time
+        - name: ends_before
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date-time
+      responses:
+        "200":
+          description: Exceções no período do profissional e tenant autorizados
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - exceptions
+                properties:
+                  exceptions:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/SchedulingAvailabilityException"
+        "401":
+          $ref: "#/components/responses/SchedulingUnauthorized"
+        "403":
+          $ref: "#/components/responses/SchedulingForbidden"
+        "404":
+          $ref: "#/components/responses/SchedulingNotFound"
+    post:
+      operationId: createAvailabilityException
+      description: Rejeita atomicamente o bloqueio se conflitar com agendamentos confirmados. O
+        responsável deve cancelar ou reagendar os conflitos antes de nova tentativa.
+      summary: Criar pausa, folga ou bloqueio pontual
+      tags:
+        - Gestão
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/SchedulingIdempotencyKey"
+        - name: professional_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SchedulingAvailabilityExceptionInput"
+      responses:
+        "201":
+          description: Exceção criada
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SchedulingAvailabilityException"
+        "401":
+          $ref: "#/components/responses/SchedulingUnauthorized"
+        "403":
+          $ref: "#/components/responses/SchedulingForbidden"
+        "404":
+          $ref: "#/components/responses/SchedulingNotFound"
+        "409":
+          $ref: "#/components/responses/SchedulingHasBookings"
+        "422":
+          $ref: "#/components/responses/SchedulingValidationFailure"
+  /management/professionals/{professional_id}/exceptions/{exception_id}:
+    delete:
+      operationId: deleteAvailabilityException
+      summary: Remover exceção de disponibilidade
+      tags:
+        - Gestão
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/SchedulingIdempotencyKey"
+        - name: professional_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: exception_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "204":
+          description: Exceção removida
+        "401":
+          $ref: "#/components/responses/SchedulingUnauthorized"
+        "403":
+          $ref: "#/components/responses/SchedulingForbidden"
+        "404":
+          $ref: "#/components/responses/SchedulingNotFound"
+        "409":
+          $ref: "#/components/responses/SchedulingIdempotencyConflict"
+  /management/appointments:
+    get:
+      operationId: listAppointments
+      summary: Consultar agenda da própria barbearia
+      tags:
+        - Gestão
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: starts_from
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date-time
+        - name: ends_before
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date-time
+        - name: professional_id
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: "#/components/schemas/SchedulingAppointmentStatus"
+      responses:
+        "200":
+          description: Agendamentos do período no tenant autorizado
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - appointments
+                properties:
+                  appointments:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/SchedulingManagedAppointment"
+        "401":
+          $ref: "#/components/responses/SchedulingUnauthorized"
+        "403":
+          $ref: "#/components/responses/SchedulingForbidden"
+        "422":
+          $ref: "#/components/responses/SchedulingValidationFailure"
+  /management/appointments/{appointment_id}/cancellation:
+    post:
+      operationId: cancelAppointment
+      description: Aceita somente agendamentos confirmed. cancelled, attended e no_show são finais e
+        imutáveis; uma nova reserva exige outro agendamento. Repetição com a mesma chave idempotente
+        reproduz a resposta original sem nova transição.
+      summary: Cancelar agendamento e liberar o intervalo
+      tags:
+        - Gestão
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/SchedulingIdempotencyKey"
+        - name: appointment_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Agendamento cancelado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SchedulingManagedAppointment"
+        "401":
+          $ref: "#/components/responses/SchedulingUnauthorized"
+        "403":
+          $ref: "#/components/responses/SchedulingForbidden"
+        "404":
+          $ref: "#/components/responses/SchedulingNotFound"
+        "409":
+          $ref: "#/components/responses/SchedulingInvalidTransition"
+  /management/appointments/{appointment_id}/rescheduling:
+    post:
+      operationId: rescheduleAppointment
+      description: Aceita somente agendamentos confirmed. Revalida grade, janela, antecedência mínima no
+        instante da confirmação e disponibilidade integral; com antecedência zero exige início
+        futuro. Atualiza ambos os intervalos atomicamente; em qualquer rejeição preserva o intervalo
+        original. Estados finais não podem ser reagendados.
+      summary: Reagendar mantendo atualização atômica
+      tags:
+        - Gestão
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/SchedulingIdempotencyKey"
+        - name: appointment_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required:
+                - starts_at
+              properties:
+                starts_at:
+                  type: string
+                  format: date-time
+      responses:
+        "200":
+          description: Novo intervalo confirmado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SchedulingManagedAppointment"
+        "401":
+          $ref: "#/components/responses/SchedulingUnauthorized"
+        "403":
+          $ref: "#/components/responses/SchedulingForbidden"
+        "404":
+          $ref: "#/components/responses/SchedulingNotFound"
+        "409":
+          $ref: "#/components/responses/SchedulingReschedulingConflict"
+        "422":
+          $ref: "#/components/responses/SchedulingValidationFailure"
+  /management/appointments/{appointment_id}/outcome:
+    post:
+      operationId: recordAppointmentOutcome
+      description: Exige instante atual igual ou posterior ao início agendado para no_show, ou ao término
+        para attended; caso contrário retorna 409. Aceita somente agendamentos confirmed. cancelled,
+        attended e no_show são finais e não permitem alteração posterior; a repetição idempotente
+        apenas reproduz a resposta original.
+      summary: Marcar atendimento concluído ou não comparecimento
+      tags:
+        - Gestão
+      security:
+        - bearerAuth: []
+      parameters:
+        - $ref: "#/components/parameters/SchedulingIdempotencyKey"
+        - name: appointment_id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required:
+                - status
+              properties:
+                status:
+                  type: string
+                  enum:
+                    - attended
+                    - no_show
+      responses:
+        "200":
+          description: Resultado registrado
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SchedulingManagedAppointment"
+        "401":
+          $ref: "#/components/responses/SchedulingUnauthorized"
+        "403":
+          $ref: "#/components/responses/SchedulingForbidden"
+        "404":
+          $ref: "#/components/responses/SchedulingNotFound"
+        "409":
+          $ref: "#/components/responses/SchedulingInvalidTransition"
+        "422":
+          $ref: "#/components/responses/SchedulingValidationFailure"
+  /health:
+    get:
+      operationId: getHealth
+      summary: Verificar se o processo HTTP está respondendo
+      description: Não consulta o banco nem garante compatibilidade de schema. Não exige autenticação.
+      tags:
+        - Operação
+      security: []
+      responses:
+        "200":
+          description: Processo HTTP respondendo
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required:
+                  - status
+                properties:
+                  status:
+                    type: string
+                    const: ok
+    servers: &a1
+      - url: /
+  /ready:
+    get:
+      operationId: getReadiness
+      summary: Verificar conexão com o banco e revisão de schema suportada
+      description: Retorna 500 quando a consulta ao banco falha ou a revisão não é suportada. Não executa
+        atualização do banco. Não exige autenticação.
+      tags:
+        - Operação
+      security: []
+      responses:
+        "200":
+          description: Banco acessível com revisão suportada
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required:
+                  - status
+                  - schema_revision
+                properties:
+                  status:
+                    type: string
+                    const: ready
+                  schema_revision:
+                    type: string
+                    const: 002-appointment-scheduling-v2
+        "500":
+          description: Dependência indisponível ou schema incompatível; detalhes técnicos somente nos logs
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/OperationsProblem"
+    servers: *a1
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    AuthenticationTenantRegistrationRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - tenant_name
+        - tenant_slug
+        - administrator_email
+      properties:
+        tenant_name:
+          type: string
+          minLength: 1
+          maxLength: 160
+        tenant_slug:
+          type: string
+          pattern: ^[a-z0-9]+(?:-[a-z0-9]+)*$
+          minLength: 3
+          maxLength: 80
+        administrator_email:
+          type: string
+          format: email
+          maxLength: 254
+          writeOnly: true
+    AuthenticationRegistrationAttemptResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - registration_attempt_id
+        - status
+        - challenge_id
+        - expires_in
+        - resend_after
+      properties:
+        registration_attempt_id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          const: verification_required
+        challenge_id:
+          type: string
+          format: uuid
+        expires_in:
+          type: integer
+          const: 600
+        resend_after:
+          type: integer
+          const: 60
+    AuthenticationOtpRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - tenant_slug
+        - email
+      properties:
+        tenant_slug:
+          type: string
+          pattern: ^[a-z0-9]+(?:-[a-z0-9]+)*$
+          minLength: 3
+          maxLength: 80
+        email:
+          type: string
+          format: email
+          maxLength: 254
+          writeOnly: true
+    AuthenticationOtpRequestResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - status
+        - challenge_id
+        - expires_in
+        - resend_after
+      properties:
+        status:
+          type: string
+          const: accepted
+        challenge_id:
+          type: string
+          format: uuid
+          description: Identificador opaco; não comprova conta, contato ou entrega.
+        expires_in:
+          type: integer
+          const: 600
+        resend_after:
+          type: integer
+          const: 60
+    AuthenticationOtpVerificationRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - challenge_id
+        - code
+      properties:
+        challenge_id:
+          type: string
+          format: uuid
+        code:
+          type: string
+          pattern: ^[0-9]{6}$
+          minLength: 6
+          maxLength: 6
+          writeOnly: true
+    AuthenticationTokenResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - access_token
+        - token_type
+        - expires_in
+      properties:
+        access_token:
+          type: string
+          description: JWT restrito ao tenant. Não contém e-mail ou OTP; sua expiração é a expiração imutável
+            da sessão criada nesta verificação.
+        token_type:
+          type: string
+          const: Bearer
+        expires_in:
+          type: integer
+          minimum: 900
+          maximum: 604800
+          default: 86400
+          examples:
+            - 86400
+          description: Duração da nova sessão em segundos, definida pela configuração vigente na emissão; usa
+            24 horas quando nenhuma configuração é fornecida.
+    AuthenticationProblem:
+      type: object
+      additionalProperties: false
+      required:
+        - type
+        - title
+        - status
+        - code
+        - correlation_id
+      properties:
+        type:
+          type: string
+          format: uri-reference
+        title:
+          type: string
+        status:
+          type: integer
+          minimum: 400
+          maximum: 599
+        code:
+          type: string
+        detail:
+          type: string
+        correlation_id:
+          type: string
+          format: uuid
+        retry_after_seconds:
+          type: integer
+          minimum: 1
+    SchedulingSchedulingSettings:
+      type: object
+      additionalProperties: false
+      required:
+        - slot_interval_minutes
+        - minimum_advance_minutes
+      properties:
+        slot_interval_minutes:
+          type: integer
+          minimum: 1
+          default: 15
+          description: Intervalo entre inícios, ancorado no início de cada período de expediente.
+        minimum_advance_minutes:
+          type: integer
+          minimum: 0
+          default: 30
+          description: Antecedência na consulta e na confirmação; zero permite somente inícios futuros.
+    SchedulingAppointmentStatus:
+      type: string
+      enum:
+        - confirmed
+        - cancelled
+        - attended
+        - no_show
+      description: confirmed permite cancelamento e reagendamento; no_show é permitido desde o início
+        agendado e attended desde o término; cancelled, attended e no_show são finais e imutáveis.
+    SchedulingPublicService:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - name
+        - duration_minutes
+        - price_minor
+        - currency_code
+        - professionals
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        duration_minutes:
+          type: integer
+          minimum: 1
+          maximum: 480
+        price_minor:
+          type: integer
+          minimum: 0
+        currency_code:
+          type: string
+          pattern: ^[A-Z]{3}$
+        professionals:
+          type: array
+          items:
+            $ref: "#/components/schemas/SchedulingPublicProfessional"
+    SchedulingPublicProfessional:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - display_name
+      properties:
+        id:
+          type: string
+          format: uuid
+        display_name:
+          type: string
+    SchedulingManagedService:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - name
+        - duration_minutes
+        - price_minor
+        - currency_code
+        - professional_ids
+        - status
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        description:
+          type: string
+          maxLength: 1000
+        duration_minutes:
+          type: integer
+          minimum: 1
+          maximum: 480
+        price_minor:
+          type: integer
+          minimum: 0
+        currency_code:
+          type: string
+          pattern: ^[A-Z]{3}$
+        professional_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+        status:
+          type: string
+          enum:
+            - active
+            - inactive
+    SchedulingServiceInput:
+      type: object
+      additionalProperties: false
+      required:
+        - name
+        - duration_minutes
+        - price_minor
+        - currency_code
+        - professional_ids
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        description:
+          type: string
+          maxLength: 1000
+        duration_minutes:
+          type: integer
+          minimum: 1
+          maximum: 480
+        price_minor:
+          type: integer
+          minimum: 0
+        currency_code:
+          type: string
+          pattern: ^[A-Z]{3}$
+        professional_ids:
+          type: array
+          minItems: 1
+          items:
+            type: string
+            format: uuid
+    SchedulingServicePatch:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        description:
+          type: string
+          maxLength: 1000
+        duration_minutes:
+          type: integer
+          minimum: 1
+          maximum: 480
+        price_minor:
+          type: integer
+          minimum: 0
+        currency_code:
+          type: string
+          pattern: ^[A-Z]{3}$
+        status:
+          type: string
+          enum:
+            - active
+            - inactive
+        professional_ids:
+          type: array
+          items:
+            type: string
+            format: uuid
+    SchedulingProfessional:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - display_name
+        - status
+      properties:
+        id:
+          type: string
+          format: uuid
+        display_name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        status:
+          type: string
+          enum:
+            - active
+            - inactive
+    SchedulingProfessionalInput:
+      type: object
+      additionalProperties: false
+      required:
+        - display_name
+      properties:
+        display_name:
+          type: string
+          minLength: 1
+          maxLength: 120
+    SchedulingProfessionalPatch:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        display_name:
+          type: string
+          minLength: 1
+          maxLength: 120
+        status:
+          type: string
+          enum:
+            - active
+            - inactive
+    SchedulingWeeklyWorkPeriodInput:
+      type: object
+      additionalProperties: false
+      required:
+        - iso_weekday
+        - starts_local_time
+        - ends_local_time
+      properties:
+        iso_weekday:
+          type: integer
+          minimum: 1
+          maximum: 7
+        starts_local_time:
+          type: string
+          pattern: ^([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]$
+          example: 09:00:00
+        ends_local_time:
+          type: string
+          pattern: ^([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]$
+          example: 18:00:00
+    SchedulingAvailabilityExceptionInput:
+      type: object
+      additionalProperties: false
+      required:
+        - kind
+        - starts_at
+        - ends_at
+      properties:
+        kind:
+          type: string
+          enum:
+            - break
+            - time_off
+            - holiday
+            - blocked
+        starts_at:
+          type: string
+          format: date-time
+        ends_at:
+          type: string
+          format: date-time
+        reason:
+          type: string
+          maxLength: 240
+    SchedulingAvailabilityException:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - kind
+        - starts_at
+        - ends_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        kind:
+          type: string
+          enum:
+            - break
+            - time_off
+            - holiday
+            - blocked
+        starts_at:
+          type: string
+          format: date-time
+        ends_at:
+          type: string
+          format: date-time
+        reason:
+          type: string
+          maxLength: 240
+    SchedulingAvailableSlot:
+      type: object
+      additionalProperties: false
+      required:
+        - starts_at
+        - ends_at
+        - professional_id
+        - professional_name
+      properties:
+        starts_at:
+          type: string
+          format: date-time
+        ends_at:
+          type: string
+          format: date-time
+        professional_id:
+          type: string
+          format: uuid
+        professional_name:
+          type: string
+    SchedulingGuestAppointmentRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - service_id
+        - starts_at
+        - guest_name
+        - guest_phone
+        - guest_email
+      properties:
+        service_id:
+          type: string
+          format: uuid
+        professional_id:
+          type:
+            - string
+            - "null"
+          format: uuid
+          description: Omitir ou usar null para aceitar qualquer profissional elegível.
+        starts_at:
+          type: string
+          format: date-time
+        guest_name:
+          type: string
+          minLength: 1
+          maxLength: 160
+        guest_phone:
+          type: string
+          pattern: ^\+[1-9][0-9]{7,14}$
+        guest_email:
+          type: string
+          format: email
+          maxLength: 254
+    SchedulingGuestAppointmentResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - status
+        - service_name
+        - professional_name
+        - starts_at
+        - ends_at
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+          const: confirmed
+        service_name:
+          type: string
+        professional_name:
+          type: string
+        starts_at:
+          type: string
+          format: date-time
+        ends_at:
+          type: string
+          format: date-time
+    SchedulingManagedAppointment:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - status
+        - service_id
+        - service_name
+        - professional_id
+        - professional_name
+        - starts_at
+        - ends_at
+        - guest_name
+        - guest_phone
+        - guest_email
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          $ref: "#/components/schemas/SchedulingAppointmentStatus"
+        service_id:
+          type: string
+          format: uuid
+        service_name:
+          type: string
+        professional_id:
+          type: string
+          format: uuid
+        professional_name:
+          type: string
+        starts_at:
+          type: string
+          format: date-time
+        ends_at:
+          type: string
+          format: date-time
+        guest_name:
+          type: string
+        guest_phone:
+          type: string
+        guest_email:
+          type: string
+          format: email
+    SchedulingBookingsConflictProblem:
+      type: object
+      additionalProperties: false
+      required:
+        - type
+        - title
+        - status
+        - correlation_id
+        - conflicting_appointment_ids
+      properties:
+        type:
+          type: string
+          const: urn:problem:confirmed-bookings-conflict
+        title:
+          type: string
+        status:
+          type: integer
+          const: 409
+        detail:
+          type: string
+          description: Descrição sem dados pessoais dos convidados.
+        correlation_id:
+          type: string
+          format: uuid
+        conflicting_appointment_ids:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items:
+            type: string
+            format: uuid
+    SchedulingProblem:
+      type: object
+      additionalProperties: false
+      required:
+        - type
+        - title
+        - status
+        - correlation_id
+      properties:
+        type:
+          type: string
+          format: uri-reference
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        correlation_id:
+          type: string
+          format: uuid
+    OperationsProblem:
+      type: object
+      additionalProperties: false
+      required:
+        - type
+        - title
+        - status
+        - code
+        - correlation_id
+      properties:
+        type:
+          type: string
+          format: uri-reference
+        title:
+          type: string
+        status:
+          type: integer
+          const: 500
+        code:
+          type: string
+          const: internal_error
+        correlation_id:
+          type: string
+          format: uuid
+  responses:
+    AuthenticationRegistrationConflict:
+      description: Um identificador de cadastro ficou indisponível; nenhum estado parcial permanece
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/AuthenticationProblem"
+    AuthenticationInvalidOtp:
+      description: A operação falhou sem indicar se desafio, código, contato, conta, tenant ou vínculo era
+        inválido, expirado, consumido, substituído ou bloqueado
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/AuthenticationProblem"
+    AuthenticationValidationFailure:
+      description: Os dados enviados não atendem ao schema público
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/AuthenticationProblem"
+    AuthenticationTooManyRequests:
+      description: Tente novamente mais tarde; a resposta não identifica o escopo limitado
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+            minimum: 1
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/AuthenticationProblem"
+    SchedulingUnauthorized:
+      description: Sessão ausente, inválida ou expirada
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/SchedulingProblem"
+    SchedulingForbidden:
+      description: Papel ou tenant sem permissão para a operação
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/SchedulingProblem"
+    SchedulingNotFound:
+      description: Recurso não encontrado neste escopo
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/SchedulingProblem"
+    SchedulingSlotConflict:
+      description: Horário ficou indisponível ou conflita com outro agendamento, ou chave idempotente
+        reutilizada com conteúdo diferente. Não expõe dados nem IDs de outros agendamentos; o
+        cliente pode consultar disponibilidade novamente.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/SchedulingProblem"
+    SchedulingHasBookings:
+      description: Alteração rejeitada atomicamente por conflito com agendamentos confirmados;
+        configuração anterior e compromissos preservados. Retorna conflicting_appointment_ids
+        somente do tenant autorizado, sem dados pessoais dos convidados. Uma nova tentativa exige
+        cancelar ou reagendar os conflitos. Também cobre reutilização da chave idempotente com
+        conteúdo diferente, sem lista de agendamentos nesse caso.
+      content:
+        application/problem+json:
+          schema:
+            oneOf:
+              - $ref: "#/components/schemas/SchedulingBookingsConflictProblem"
+              - $ref: "#/components/schemas/SchedulingProblem"
+    SchedulingIdempotencyConflict:
+      description: Chave idempotente reutilizada com conteúdo diferente
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/SchedulingProblem"
+    SchedulingReschedulingConflict:
+      description: Horário indisponível, estado diferente de confirmed ou chave idempotente reutilizada
+        com conteúdo diferente; intervalo original preservado
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/SchedulingProblem"
+    SchedulingInvalidTransition:
+      description: Transição de estado não permitida (inclui qualquer alteração de estado final), ou chave
+        idempotente reutilizada com conteúdo diferente
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/SchedulingProblem"
+    SchedulingValidationFailure:
+      description: Entrada inválida
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/SchedulingProblem"
+    SchedulingTooManyRequests:
+      description: Limite de tentativas atingido
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/SchedulingProblem"
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+            minimum: 1
+  parameters:
+    SchedulingIdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: Obrigatória em toda mutação. Chave opaca isolada por tenant, ator autenticado (ou
+        contexto público), operação e recurso alvo. Durante 24 horas, repetir a mesma chave com o
+        mesmo conteúdo reproduz status, cabeçalhos aplicativos e corpo da resposta inicial sem
+        repetir efeitos, inclusive sob concorrência. Conteúdo diferente para a mesma chave retorna
+        409. Após expirar, uma nova operação passa por todas as validações atuais. Replays
+        administrativos exigem autenticação e autorização.
+      schema:
+        type: string
+        minLength: 16
+        maxLength: 128
+    SchedulingTenantSlug:
+      name: tenant_slug
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: ^[a-z0-9]+(?:-[a-z0-9]+)*$
+        minLength: 3
+        maxLength: 80

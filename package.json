@@ -31,6 +31,7 @@
     "test:e2e": "sh scripts/test-e2e.sh",
     "contract:types": "yarn openapi-typescript specs/001-tenant-authentication/contracts/openapi.yaml -o src/shared/http/openapi-types.ts && yarn openapi-typescript specs/002-appointment-scheduling/contracts/openapi.yaml -o src/modules/scheduling/infrastructure/http/openapi-types.ts",
     "contract:check": "sh scripts/check-openapi.sh",
+    "docs:openapi": "node scripts/build-openapi.ts",
     "schema:check": "sh scripts/check-schema-drift.sh",
     "ci:check": "sh scripts/check-ci.sh",
     "prepare": "node .husky/install.mjs"

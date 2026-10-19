@@ -4,6 +4,9 @@ build/
 coverage/
 src/shared/http/openapi-types.ts
 src/modules/scheduling/infrastructure/http/openapi-types.ts
+docs/openapi/openapi.yaml
+docs/openapi/openapi.json
+docs/openapi/index.html
 package-lock.json
 yarn.lock
 pnpm-lock.yaml

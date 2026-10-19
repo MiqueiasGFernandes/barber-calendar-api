@@ -185,7 +185,9 @@ yarn worker
 
 ## API
 
-Os contratos OpenAPI 3.1 de [autenticação](specs/001-tenant-authentication/contracts/openapi.yaml) e [agendamento](specs/002-appointment-scheduling/contracts/openapi.yaml) são versionados separadamente. O serviço não expõe Swagger UI ou ReDoc no runtime atual.
+Comece pela [documentação geral da API](docs/openapi/README.md), com autenticação, exemplos de consumo, idempotência, erros e todas as operações. O [OpenAPI consolidado em YAML](docs/openapi/openapi.yaml), também disponível em [JSON](docs/openapi/openapi.json), pode ser importado em ferramentas compatíveis. Para consultar no navegador, abra a [referência HTML local](docs/openapi/index.html), com busca e detalhes dos contratos.
+
+Os contratos OpenAPI 3.1 de [autenticação](specs/001-tenant-authentication/contracts/openapi.yaml) e [agendamento](specs/002-appointment-scheduling/contracts/openapi.yaml) continuam como fontes versionadas por módulo. Execute `yarn docs:openapi` para atualizar a documentação consolidada. O serviço não expõe Swagger UI ou ReDoc no runtime atual.
 
 | Método | Rota                         | Finalidade                                             |
 | ------ | ---------------------------- | ------------------------------------------------------ |
@@ -336,6 +338,9 @@ O Husky instala `.husky/pre-commit` durante `yarn install`. Antes de cada commit
 
 ## Documentação
 
+- [Documentação geral da API e guia de consumo](docs/openapi/README.md)
+- [OpenAPI consolidado](docs/openapi/openapi.yaml)
+- [Referência HTML da API](docs/openapi/index.html)
 - [Especificação funcional](specs/001-tenant-authentication/spec.md)
 - [Plano de implementação](specs/001-tenant-authentication/plan.md)
 - [Modelo de dados](specs/001-tenant-authentication/data-model.md)
