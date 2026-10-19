@@ -13,6 +13,6 @@ export class GetPublicAvailabilityUseCase {
     if(!snapshot)throw new ApplicationError(404,'not_found','Service not found');
     const candidates=availableSlots({date:input.date,now,timeZone:snapshot.timeZone,slotIntervalMinutes:snapshot.slotIntervalMinutes,minimumAdvanceMinutes:snapshot.minimumAdvanceMinutes,durationMinutes:snapshot.service.duration_minutes,professionals:snapshot.professionals,converter:this.zones, ...(input.professionalId?{selectedProfessionalId:input.professionalId}:{})});
     const names=new Map(snapshot.service.professionals.map((professional)=>[professional.id,professional.display_name]));
-    return {date:input.date,time_zone:snapshot.timeZone,service:snapshot.service,slots:candidates.map((slot)=>({starts_at:slot.startsAt.toISOString(),ends_at:slot.endsAt.toISOString(),professional_id:slot.professionalId,professional_name:names.get(slot.professionalId)??''}))};
+    return {date:input.date,time_zone:snapshot.timeZone,service:snapshot.service,slots:candidates.map((slot)=>({starts_at:this.zones.instantToOffsetDateTime(slot.startsAt,snapshot.timeZone),ends_at:this.zones.instantToOffsetDateTime(slot.endsAt,snapshot.timeZone),professional_id:slot.professionalId,professional_name:names.get(slot.professionalId)??''}))};
   }
 }

@@ -9,7 +9,10 @@ export interface PublicCatalogPort {
   findService(tenantId: string, serviceId: string): Promise<PublicService | null>;
 }
 export interface AvailabilitySnapshot { tenantId: string; timeZone: string; slotIntervalMinutes: number; minimumAdvanceMinutes: number; service: PublicService; professionals: AvailabilityProfessional[]; }
-export interface AvailabilityPort { load(tenantId: string, serviceId: string, date: string): Promise<AvailabilitySnapshot | null>; }
+export interface AvailabilityPort {
+  load(tenantId: string, serviceId: string, date: string): Promise<AvailabilitySnapshot | null>;
+  loadInTransaction(context: TransactionContext, tenantId: string, serviceId: string, date: string): Promise<AvailabilitySnapshot | null>;
+}
 
 export interface AppointmentRecord {
   id: string;

@@ -35,4 +35,26 @@ describe('availability', () => {
     const explicit = availableSlots({ date: '2030-01-07', now: utcNow, timeZone: 'UTC', slotIntervalMinutes: 30, minimumAdvanceMinutes: 0, durationMinutes: 30, professionals, converter, selectedProfessionalId: 'b' });
     expect(explicit[0]?.professionalId).toBe('b');
   });
+  it('restarts each period grid at its own start and permits shared boundaries', () => {
+    const periods = [
+      { startsAt: '09:00:00', endsAt: '09:30:00' },
+      { startsAt: '10:00:00', endsAt: '10:30:00' },
+    ];
+    const slots = availableSlots({
+      date: '2030-01-07', now: utcNow, timeZone: 'UTC', slotIntervalMinutes: 20,
+      minimumAdvanceMinutes: 0, durationMinutes: 30,
+      professionals: [{ ...pro('p'), periods, appointments: [{ startsAt: new Date('2030-01-07T09:30:00Z'), endsAt: new Date('2030-01-07T10:00:00Z') }] }], converter,
+    });
+    expect(slots.map(({ startsAt }) => startsAt.toISOString())).toEqual([
+      '2030-01-07T09:00:00.000Z', '2030-01-07T10:00:00.000Z',
+    ]);
+  });
+  it('breaks equal daily workloads by the smallest professional UUID', () => {
+    const slots = availableSlots({
+      date: '2030-01-07', now: utcNow, timeZone: 'UTC', slotIntervalMinutes: 30,
+      minimumAdvanceMinutes: 0, durationMinutes: 30,
+      professionals: [pro('b', { startsAt: '09:00:00', endsAt: '10:00:00' }), pro('a', { startsAt: '09:00:00', endsAt: '10:00:00' })], converter,
+    });
+    expect(slots[0]?.professionalId).toBe('a');
+  });
 });

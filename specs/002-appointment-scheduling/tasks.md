@@ -6,7 +6,7 @@
 
 **Testes**: Obrigatórios pelos cenários da especificação e pela constituição (`.specify/memory/constitution.md`). Em cada incremento, escrever os testes, observar falha pertinente, implementar e refatorar. Não marcar tarefa como concluída apenas por criar um teste ainda falhando.
 
-**Organização**: TypeScript/NestJS/Fastify e PostgreSQL existentes; reaproveitar infraestrutura. Os caminhos abaixo são relativos à raiz. Novos endpoints ficam em `/v1`, preservando autenticação existente. T001–T004 e T005–T021 estão concluídas; as fases posteriores permanecem pendentes.
+**Organização**: TypeScript/NestJS/Fastify e PostgreSQL existentes; reaproveitar infraestrutura. Os caminhos abaixo são relativos à raiz. Novos endpoints ficam em `/v1`, preservando autenticação existente. T001–T004 e T005–T034 estão concluídas; as fases posteriores permanecem pendentes.
 
 ## Formato: `[ID] [P?] [História] Descrição`
 
@@ -72,33 +72,33 @@
 
 ### Testes da História 1
 
-- [ ] T022 [P] [US1] Criar testes em `test/unit/scheduling/availability.spec.ts` para grade 15/20 ancorada por período, duração integral, bordas adjacentes, pausas, antecedência 30/zero/limiar, janela inclusiva hoje..hoje+30, escolha explícita e desempate por carga/UUID.
+- [X] T022 [P] [US1] Criar testes em `test/unit/scheduling/availability.spec.ts` para grade 15/20 ancorada por período, duração integral, bordas adjacentes, pausas, antecedência 30/zero/limiar, janela inclusiva hoje..hoje+30, escolha explícita e desempate por carga/UUID.
 
-- [ ] T023 [P] [US1] Criar testes das operações `listPublicServices`, `getPublicAvailability`, `createGuestAppointment` em `test/contract/scheduling-public.contract.spec.ts`: schemas, 201/404/409/422/429, slots vazios, offset local, três contatos obrigatórios, idempotência e ausência de PII de terceiros.
+- [X] T023 [P] [US1] Criar testes das operações `listPublicServices`, `getPublicAvailability`, `createGuestAppointment` em `test/contract/scheduling-public.contract.spec.ts`: schemas, 201/404/409/422/429, slots vazios, offset local, três contatos obrigatórios, idempotência e ausência de PII de terceiros.
 
-- [ ] T024 [P] [US1] Criar testes PostgreSQL em `test/integration/scheduling/booking-concurrency.spec.ts`: 100 chaves distintas disputam um intervalo (1 sucesso/99 conflitos), intervalos adjacentes, replay concorrente, rollback, múltiplos profissionais elegíveis e relógio expirando após lock; isolar throttle nessa fixture.
+- [X] T024 [P] [US1] Criar testes PostgreSQL em `test/integration/scheduling/booking-concurrency.spec.ts`: 100 chaves distintas disputam um intervalo (1 sucesso/99 conflitos), intervalos adjacentes, replay concorrente, rollback, múltiplos profissionais elegíveis e relógio expirando após lock; isolar throttle nessa fixture.
 
-- [ ] T025 [P] [US1] Criar `test/e2e/appointments.e2e-spec.ts` cobrindo os nove cenários US1, consulta após reserva, entrada malformada, tenant inexistente e respostas privadas; usar relógio controlado sem esperas reais.
+- [X] T025 [P] [US1] Criar `test/e2e/appointments.e2e-spec.ts` cobrindo os nove cenários US1, consulta após reserva, entrada malformada, tenant inexistente e respostas privadas; usar relógio controlado sem esperas reais.
 
 ### Implementação da História 1
 
-- [ ] T026 [US1] Implementar agregado em `src/modules/scheduling/domain/appointment.ts`: “`ends_at > starts_at`”, intervalo “[starts_at, ends_at)”, estado inicial `confirmed`, snapshots de nome/duração/preço/moeda, sem aceitar fim/preço/duração fornecidos pelo convidado; exigir contatos com regras de T010.
+- [X] T026 [US1] Implementar agregado em `src/modules/scheduling/domain/appointment.ts`: “`ends_at > starts_at`”, intervalo “[starts_at, ends_at)”, estado inicial `confirmed`, snapshots de nome/duração/preço/moeda, sem aceitar fim/preço/duração fornecidos pelo convidado; exigir contatos com regras de T010.
 
-- [ ] T027 [US1] Testar e implementar adapter de zona em `test/unit/scheduling/time-zone.spec.ts` e `src/modules/scheduling/infrastructure/time/iana-time-zone.adapter.ts`: zonas IANA reconhecidas, ignorar horários inexistentes e emitir dois instantes com offsets para horários repetidos; duração em minutos decorridos e janela por data local.
+- [X] T027 [US1] Testar e implementar adapter de zona em `test/unit/scheduling/time-zone.spec.ts` e `src/modules/scheduling/infrastructure/time/iana-time-zone.adapter.ts`: zonas IANA reconhecidas, ignorar horários inexistentes e emitir dois instantes com offsets para horários repetidos; duração em minutos decorridos e janela por data local.
 
-- [ ] T028 [US1] Implementar `src/modules/scheduling/domain/availability.ts` e `src/modules/scheduling/domain/booking-policy.ts`: passo `slot_interval_minutes` ancorado em cada período, serviço cabe integralmente sem conflitos, antecedência inclusiva quando positiva e início estritamente futuro quando zero, hoje..hoje+30; estado/serviço/profissional elegíveis.
+- [X] T028 [US1] Implementar `src/modules/scheduling/domain/availability.ts` e `src/modules/scheduling/domain/booking-policy.ts`: passo `slot_interval_minutes` ancorado em cada período, serviço cabe integralmente sem conflitos, antecedência inclusiva quando positiva e início estritamente futuro quando zero, hoje..hoje+30; estado/serviço/profissional elegíveis.
 
-- [ ] T029 [P] [US1] Implementar `src/modules/scheduling/infrastructure/persistence/public-catalog.repository.ts` e `src/modules/scheduling/application/use-cases/list-public-services.use-case.ts`; resolver slug validado, retornar somente serviços/profissionais ativos associados no tenant.
+- [X] T029 [P] [US1] Implementar `src/modules/scheduling/infrastructure/persistence/public-catalog.repository.ts` e `src/modules/scheduling/application/use-cases/list-public-services.use-case.ts`; resolver slug validado, retornar somente serviços/profissionais ativos associados no tenant.
 
-- [ ] T030 [P] [US1] Implementar snapshot consistente de consulta em `src/modules/scheduling/infrastructure/persistence/availability.repository.ts` e `src/modules/scheduling/application/use-cases/get-public-availability.use-case.ts`; carregar settings/jornadas/exceções/confirmed sem lock de escrita, retornar todas as opções elegíveis ou slots vazios.
+- [X] T030 [P] [US1] Implementar snapshot consistente de consulta em `src/modules/scheduling/infrastructure/persistence/availability.repository.ts` e `src/modules/scheduling/application/use-cases/get-public-availability.use-case.ts`; carregar settings/jornadas/exceções/confirmed sem lock de escrita, retornar todas as opções elegíveis ou slots vazios.
 
-- [ ] T031 [US1] Implementar `src/modules/scheduling/infrastructure/persistence/appointment.repository.ts` e `src/modules/scheduling/application/use-cases/create-guest-appointment.use-case.ts`; usar protocolo comum, replay antes de revalidar, ler dados após lock, capturar relógio e revalidar grade/antecedência; escolher menor total de minutos confirmados no dia e desempate UUID quando profissional omitido; persistir reserva/evento/resultado juntos.
+- [X] T031 [US1] Implementar `src/modules/scheduling/infrastructure/persistence/appointment.repository.ts` e `src/modules/scheduling/application/use-cases/create-guest-appointment.use-case.ts`; usar protocolo comum, replay antes de revalidar, ler dados após lock, capturar relógio e revalidar grade/antecedência; escolher menor total de minutos confirmados no dia e desempate UUID quando profissional omitido; persistir reserva/evento/resultado juntos.
 
-- [ ] T032 [US1] Testar e implementar `test/integration/scheduling/public-throttle.spec.ts`, `src/modules/scheduling/infrastructure/persistence/public-throttle.repository.ts` e `src/modules/scheduling/infrastructure/http/public-booking-rate-limit.guard.ts`: “120 leituras e 10 reservas” por minuto/tenant/HMAC-IP, incremento atômico independente do lock da agenda, replay conta tentativa, 429/Retry-After; expirar contadores após duas janelas e confiar somente em proxies configurados.
+- [X] T032 [US1] Testar e implementar `test/integration/scheduling/public-throttle.spec.ts`, `src/modules/scheduling/infrastructure/persistence/public-throttle.repository.ts` e `src/modules/scheduling/infrastructure/http/public-booking-rate-limit.guard.ts`: “120 leituras e 10 reservas” por minuto/tenant/HMAC-IP, incremento atômico independente do lock da agenda, replay conta tentativa, 429/Retry-After; expirar contadores após duas janelas e confiar somente em proxies configurados.
 
-- [ ] T033 [US1] Implementar DTOs e controllers em `src/modules/scheduling/infrastructure/http/dto/public.schemas.ts`, `public-catalog.controller.ts` e `public-appointments.controller.ts` nesse diretório, montando três rotas `/v1/public/tenants/{tenant_slug}`; telefone E.164, e-mail até 254, nome 1–160, slug regex do contrato, `additionalProperties: false` onde definido; resposta sem contatos de outros clientes.
+- [X] T033 [US1] Implementar DTOs e controllers em `src/modules/scheduling/infrastructure/http/dto/public.schemas.ts`, `public-catalog.controller.ts` e `public-appointments.controller.ts` nesse diretório, montando três rotas `/v1/public/tenants/{tenant_slug}`; telefone E.164, e-mail até 254, nome 1–160, slug regex do contrato, `additionalProperties: false` onde definido; resposta sem contatos de outros clientes.
 
-- [ ] T034 [US1] Registrar providers/rotas públicas em `src/modules/scheduling/scheduling.module.ts` e executar os testes de `test/e2e/appointments.e2e-spec.ts` e `test/integration/scheduling/booking-concurrency.spec.ts`; demonstrar reserva válida e replay, sem dependência das rotas administrativas.
+- [X] T034 [US1] Registrar providers/rotas públicas em `src/modules/scheduling/scheduling.module.ts` e executar os testes de `test/e2e/appointments.e2e-spec.ts` e `test/integration/scheduling/booking-concurrency.spec.ts`; demonstrar reserva válida e replay, sem dependência das rotas administrativas.
 
 ## Fase 4: História de Usuário 2 — Configurar Serviços e Disponibilidade (P1)
 

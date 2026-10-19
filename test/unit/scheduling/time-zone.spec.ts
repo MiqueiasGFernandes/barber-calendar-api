@@ -10,6 +10,8 @@ describe('IANA time zone adapter', () => {
   });
   it('converts instants back to an unambiguous local representation and validates IANA zones', () => {
     expect(zone.instantToLocalDateTime(new Date('2024-11-03T05:30:00Z'),'America/New_York')).toBe('2024-11-03T01:30:00');
+    expect(zone.instantToOffsetDateTime(new Date('2024-11-03T05:30:00Z'),'America/New_York')).toBe('2024-11-03T01:30:00-04:00');
+    expect(zone.instantToOffsetDateTime(new Date('2030-01-07T12:00:00Z'),'UTC')).toBe('2030-01-07T12:00:00+00:00');
     expect(zone.isValidTimeZone('Mars/Olympus')).toBe(false);
   });
 });

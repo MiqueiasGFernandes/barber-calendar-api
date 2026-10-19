@@ -1,15 +1,8 @@
 import type { TransactionContext } from '../../../../shared/application/ports/transaction.js';
+import type { AppointmentEventInput, AppointmentEventWriter } from '../../application/ports/appointment-writer.js';
 
-export interface AppointmentEventInput {
-  id: string; tenantId: string; appointmentId: string;
-  eventType: 'created' | 'rescheduled' | 'cancelled' | 'attended' | 'no_show';
-  actorMembershipId: string | null; occurredAt: Date; correlationId: string;
-  previousStatus: 'confirmed' | 'cancelled' | 'attended' | 'no_show' | null;
-  newStatus: 'confirmed' | 'cancelled' | 'attended' | 'no_show';
-  previousStartsAt: Date | null; previousEndsAt: Date | null; startsAt: Date; endsAt: Date;
-}
-
-export class AppointmentEventRepository {
+export type { AppointmentEventInput } from '../../application/ports/appointment-writer.js';
+export class AppointmentEventRepository implements AppointmentEventWriter {
   async append(context: TransactionContext, event: AppointmentEventInput): Promise<void> {
     if (event.eventType !== 'created' && event.actorMembershipId === null)
       throw new Error('only public creation may have a null actor');

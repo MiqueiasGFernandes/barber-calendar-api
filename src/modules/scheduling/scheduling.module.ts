@@ -20,6 +20,9 @@ import { ListPublicServicesUseCase } from './application/use-cases/list-public-s
 import { GetPublicAvailabilityUseCase } from './application/use-cases/get-public-availability.use-case.js';
 import { LIST_PUBLIC_SERVICES, GET_PUBLIC_AVAILABILITY, PublicCatalogController } from './infrastructure/http/public-catalog.controller.js';
 import { PublicBookingRateLimitGuard } from './infrastructure/http/public-booking-rate-limit.guard.js';
+import { AppointmentRepository } from './infrastructure/persistence/appointment.repository.js';
+import { CreateGuestAppointmentUseCase } from './application/use-cases/create-guest-appointment.use-case.js';
+import { CREATE_GUEST_APPOINTMENT, PublicAppointmentsController } from './infrastructure/http/public-appointments.controller.js';
 
 export const SCHEDULING_TRANSACTION = Symbol('SCHEDULING_TRANSACTION');
 export const IDEMPOTENCY_CIPHER = Symbol('IDEMPOTENCY_CIPHER');
@@ -29,7 +32,7 @@ export const TIME_ZONE_CONVERTER = Symbol('TIME_ZONE_CONVERTER');
 
 @Module({
   imports: [AuthenticationModule],
-  controllers: [PublicCatalogController],
+  controllers: [PublicCatalogController, PublicAppointmentsController],
   providers: [
     AdministratorGuard,
     SchedulingExceptionFilter,
@@ -44,6 +47,8 @@ export const TIME_ZONE_CONVERTER = Symbol('TIME_ZONE_CONVERTER');
     { provide: IdempotentMutationService, inject: [SCHEDULING_TRANSACTION,APPOINTMENT_IDEMPOTENCY,SCHEDULING_CLOCK], useFactory: (tx:SchedulingTransactionAdapter,records:AppointmentIdempotencyRepository,clock:SystemClock) => new IdempotentMutationService(tx,records,clock) },
     { provide: PublicCatalogRepository, inject: [DATABASE], useFactory: (db:PostgresPool) => new PublicCatalogRepository(db) },
     { provide: AvailabilityRepository, inject: [DATABASE,TIME_ZONE_CONVERTER], useFactory: (db:PostgresPool,zones:IanaTimeZoneAdapter) => new AvailabilityRepository(db,zones) },
+    AppointmentRepository,
+    { provide: CREATE_GUEST_APPOINTMENT, inject: [PublicCatalogRepository,AvailabilityRepository,TIME_ZONE_CONVERTER,IdempotentMutationService,AppointmentRepository,AppointmentEventRepository], useFactory: (catalog:PublicCatalogRepository,availability:AvailabilityRepository,zones:IanaTimeZoneAdapter,idempotency:IdempotentMutationService,appointments:AppointmentRepository,events:AppointmentEventRepository) => new CreateGuestAppointmentUseCase(catalog,availability,zones,idempotency,appointments,events) },
     { provide: LIST_PUBLIC_SERVICES, inject: [PublicCatalogRepository], useFactory: (catalog:PublicCatalogRepository) => new ListPublicServicesUseCase(catalog) },
     { provide: GET_PUBLIC_AVAILABILITY, inject: [PublicCatalogRepository,AvailabilityRepository,TIME_ZONE_CONVERTER,SCHEDULING_CLOCK], useFactory: (catalog:PublicCatalogRepository,availability:AvailabilityRepository,zones:IanaTimeZoneAdapter,clock:SystemClock) => new GetPublicAvailabilityUseCase(catalog,availability,zones,clock) },
   ],

@@ -34,4 +34,16 @@ export class IanaTimeZoneAdapter implements TimeZoneConverter {
     if (Number.isNaN(instant.getTime()) || !this.isValidTimeZone(timeZone)) throw new RangeError('invalid instant or IANA time zone');
     return key(partsAt(instant, timeZone));
   }
+  instantToOffsetDateTime(instant: Date, timeZone: string): string {
+    const local = this.instantToLocalDateTime(instant, timeZone);
+    const parts = new Intl.DateTimeFormat('en-US', { timeZone, timeZoneName: 'longOffset', hour: '2-digit' }).formatToParts(instant);
+    const value = parts.find((part) => part.type === 'timeZoneName')?.value ?? 'GMT';
+    const match = /^GMT(?:(?<sign>[+-])(?<hours>\d{2}):(?<minutes>\d{2})(?::(?<seconds>\d{2}))?)?$/.exec(value);
+    if (!match) throw new RangeError('unsupported IANA offset');
+    const sign = match.groups?.sign ?? '+';
+    const hours = match.groups?.hours ?? '00';
+    const minutes = match.groups?.minutes ?? '00';
+    const seconds = match.groups?.seconds;
+    return `${local}${sign}${hours}:${minutes}${seconds && seconds !== '00' ? `:${seconds}` : ''}`;
+  }
 }

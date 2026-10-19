@@ -1,6 +1,7 @@
 export interface TimeZoneConverter {
   localDateTimeToInstants(localDateTime: string, timeZone: string): Date[];
   instantToLocalDateTime(instant: Date, timeZone: string): string;
+  instantToOffsetDateTime(instant: Date, timeZone: string): string;
   isValidTimeZone(timeZone: string): boolean;
 }
 
