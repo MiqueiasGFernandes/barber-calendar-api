@@ -8,7 +8,7 @@ import { ThrottleRepository } from '../../src/modules/authentication/infrastruct
 import { OtpThrottleService } from '../../src/modules/authentication/application/services/otp-throttle.service.js';
 export const databaseUrl =
   process.env.DATABASE_URL ??
-  'postgres://barber_runtime:barber_runtime@localhost:55432/barber_calendar_e2e';
+  'postgres://barber_runtime:missing-test-password@localhost:55432/barber_calendar_e2e';
 export const pool = new Pool({ connectionString: databaseUrl });
 export const database = new PostgresPool({ connectionString: databaseUrl });
 export const tx = new TransactionRunner(database);

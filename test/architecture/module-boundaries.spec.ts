@@ -15,6 +15,9 @@ describe('module boundaries', () => {
     for (const path of candidates) {
       const source = readFileSync(path, 'utf8');
       expect(source, path).not.toMatch(/from ['"](?:@nestjs|@fastify|fastify|pg)/);
+      expect(source, path).not.toMatch(
+        /from ['"][^'"]*(?:\/infrastructure\/|\/shared\/(?:database|http)\/)/,
+      );
     }
   });
   it('does not contain ORM schema synchronization', () => {

@@ -1,5 +1,6 @@
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { randomUUID } from 'node:crypto';
+import { performance } from 'node:perf_hooks';
 import { RequestLoginOtpUseCase } from '../../src/modules/authentication/application/use-cases/request-login-otp.use-case.js';
 import { VerifyLoginOtpUseCase } from '../../src/modules/authentication/application/use-cases/verify-login-otp.use-case.js';
 import { TenantRepository } from '../../src/modules/tenancy/infrastructure/persistence/tenant.repository.js';
@@ -94,6 +95,40 @@ describe.runIf(enabled)('login OTP journey', () => {
         tenantId,
       ),
     ).toBeNull();
+  });
+  it('keeps known and unknown request latency in the same bounded band', async () => {
+    const request = new RequestLoginOtpUseCase(
+      tx,
+      repository,
+      otp,
+      outbox,
+      throttle,
+      clock,
+      'mailpit',
+    );
+    const knownTimes: number[] = [];
+    const unknownTimes: number[] = [];
+    for (let index = 0; index < 3; index++) {
+      const knownStart = performance.now();
+      await request.execute({
+        tenantSlug: 'seed-tenant',
+        email: 'member@example.test',
+        ip: `203.0.113.${40 + index}`,
+        correlationId: randomUUID(),
+      });
+      knownTimes.push(performance.now() - knownStart);
+      const unknownStart = performance.now();
+      await request.execute({
+        tenantSlug: 'seed-tenant',
+        email: 'missing@example.test',
+        ip: `203.0.113.${50 + index}`,
+        correlationId: randomUUID(),
+      });
+      unknownTimes.push(performance.now() - unknownStart);
+    }
+    const median = (items: number[]) => items.sort((a, b) => a - b)[1] ?? 0;
+    expect(Math.min(...knownTimes, ...unknownTimes)).toBeGreaterThanOrEqual(70);
+    expect(Math.abs(median(knownTimes) - median(unknownTimes))).toBeLessThan(100);
   });
   it('enforces resend interval, supersedes the old OTP and preserves parallel sessions', async () => {
     let now = clock.now();

@@ -1,11 +1,10 @@
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
+import type {
+  OutboxEnvelope,
+  OutboxEnvelopeCipher,
+} from '../../application/ports/outbox-envelope.js';
 
-export interface OutboxEnvelope {
-  to: string;
-  subject: string;
-  text: string;
-}
-export class OutboxCryptoAdapter {
+export class OutboxCryptoAdapter implements OutboxEnvelopeCipher {
   constructor(
     private readonly key: Buffer,
     readonly keyVersion = 1,

@@ -39,6 +39,9 @@ const base64Key = z.string().transform((value, context) => {
 export const environmentSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   PORT: z.coerce.number().int().min(1).max(65535).default(3000),
+  TRUSTED_PROXY_CIDRS: z.string().optional(),
+  OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: z.url().optional(),
+  OTEL_EXPORTER_OTLP_METRICS_ENDPOINT: z.url().optional(),
   DATABASE_URL: z.url(),
   AUTH_SESSION_TTL: sessionTtl,
   OTP_HMAC_KEY: z.string().min(32),

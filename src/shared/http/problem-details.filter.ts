@@ -1,7 +1,7 @@
 import { Catch } from '@nestjs/common';
 import type { ArgumentsHost, ExceptionFilter } from '@nestjs/common';
 import type { FastifyReply, FastifyRequest } from 'fastify';
-import { ApplicationError } from './application-error.js';
+import { ApplicationError } from '../application/application-error.js';
 
 @Catch()
 export class ProblemDetailsFilter implements ExceptionFilter {
@@ -12,7 +12,7 @@ export class ProblemDetailsFilter implements ExceptionFilter {
       exception instanceof ApplicationError
         ? exception
         : new ApplicationError(500, 'internal_error', 'Unexpected failure');
-    const correlationId = String(request.headers['x-correlation-id'] ?? request.id);
+    const correlationId = request.id;
     if (error.retryAfterSeconds !== undefined)
       response.header('Retry-After', String(error.retryAfterSeconds));
     void response

@@ -2,7 +2,7 @@ node_modules/
 dist/
 build/
 coverage/
+src/shared/http/openapi-types.ts
 package-lock.json
 yarn.lock
 pnpm-lock.yaml
-

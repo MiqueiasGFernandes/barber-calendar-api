@@ -2,15 +2,15 @@ import { randomUUID } from 'node:crypto';
 import type { Clock } from '../../../../shared/application/ports/clock.js';
 import type { OtpDigest } from '../../../../shared/application/ports/otp-generator.js';
 import type { TokenIssuer } from '../../../../shared/application/ports/token.js';
-import type { TransactionRunner } from '../../../../shared/database/transaction-runner.js';
-import { ApplicationError } from '../../../../shared/http/application-error.js';
+import type { TransactionManager } from '../../../../shared/application/ports/transaction.js';
+import { ApplicationError } from '../../../../shared/application/application-error.js';
 import type { OtpThrottleService } from '../services/otp-throttle.service.js';
-import type { RegistrationRepository } from '../../infrastructure/persistence/registration.repository.js';
+import type { AuthenticationRepository } from '../ports/authentication.repository.js';
 
 export class VerifyLoginOtpUseCase {
   constructor(
-    private readonly tx: TransactionRunner,
-    private readonly repository: RegistrationRepository,
+    private readonly tx: TransactionManager,
+    private readonly repository: AuthenticationRepository,
     private readonly digest: OtpDigest,
     private readonly tokens: TokenIssuer,
     private readonly throttle: OtpThrottleService,
@@ -49,8 +49,12 @@ export class VerifyLoginOtpUseCase {
           ip: input.ip,
           action: 'otp_verify_failure',
           now,
+          correlationId: input.correlationId,
         });
-        await this.repository.recordFailure(client, challenge, now);
+        await this.repository.recordFailure(client, challenge, now, {
+          eventId: ids.eventId,
+          correlationId: input.correlationId,
+        });
         return null;
       }
       return this.repository.completeLogin(client, challenge, now, ids, expiresAt);

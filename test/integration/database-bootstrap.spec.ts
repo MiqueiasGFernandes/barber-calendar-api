@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs';
 import { afterAll, describe, expect, it } from 'vitest';
 import { Pool } from 'pg';
 const enabled = Boolean(process.env.DATABASE_URL);
@@ -23,18 +22,17 @@ describe.runIf(enabled)('database bootstrap', () => {
       expect(result.rows[0]?.name).toBe(relation);
     }
   });
-  it('bootstrap explicitly orders every canonical script', () => {
-    const source = readFileSync('database/init/00-bootstrap.sql', 'utf8');
-    const positions = [
-      '001_extensions.sql',
-      '010_schemas.sql',
-      '020_tables.sql',
-      '030_constraints.sql',
-      '040_indexes.sql',
-      '090_schema_manifest.sql',
-      '090_grants.sql',
-    ].map((name) => source.indexOf(name));
-    expect(positions).toEqual([...positions].sort((a, b) => a - b));
+  it('starts with DML access and without schema creation privileges', async () => {
+    const grants = await pool.query(
+      `SELECT has_schema_privilege(current_user,'identity','CREATE') AS schema_create,
+        has_database_privilege(current_user,current_database(),'CREATE') AS database_create,
+        has_table_privilege(current_user,'identity.otp_challenges','INSERT') AS can_insert`,
+    );
+    expect(grants.rows[0]).toEqual({
+      schema_create: false,
+      database_create: false,
+      can_insert: true,
+    });
   });
   afterAll(() => pool.end());
 });

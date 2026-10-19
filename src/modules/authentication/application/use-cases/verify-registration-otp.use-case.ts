@@ -2,22 +2,25 @@ import { randomUUID } from 'node:crypto';
 import type { Clock } from '../../../../shared/application/ports/clock.js';
 import type { OtpDigest } from '../../../../shared/application/ports/otp-generator.js';
 import type { TokenIssuer } from '../../../../shared/application/ports/token.js';
-import type { TransactionRunner } from '../../../../shared/database/transaction-runner.js';
-import { ApplicationError } from '../../../../shared/http/application-error.js';
-import type { RegistrationRepository } from '../../infrastructure/persistence/registration.repository.js';
+import type { TransactionManager } from '../../../../shared/application/ports/transaction.js';
+import { ApplicationError } from '../../../../shared/application/application-error.js';
+import type { AuthenticationRepository } from '../ports/authentication.repository.js';
+import type { OtpThrottleService } from '../services/otp-throttle.service.js';
 
 export class VerifyRegistrationOtpUseCase {
   constructor(
-    private readonly tx: TransactionRunner,
-    private readonly repository: RegistrationRepository,
+    private readonly tx: TransactionManager,
+    private readonly repository: AuthenticationRepository,
     private readonly digest: OtpDigest,
     private readonly tokens: TokenIssuer,
+    private readonly throttle: OtpThrottleService,
     private readonly clock: Clock,
     private readonly sessionTtlSeconds: number,
   ) {}
   async execute(input: {
     challengeId: string;
     code: string;
+    ip: string;
     correlationId: string;
   }): Promise<{ accessToken: string; tokenType: 'Bearer'; expiresIn: number }> {
     if (!/^\d{6}$/.test(input.code))
@@ -43,8 +46,20 @@ export class VerifyRegistrationOtpUseCase {
           now >= challenge.expiresAt ||
           !this.digest.matches(challenge.id, challenge.purpose, input.code, challenge.codeDigest)
         ) {
-          if (challenge && challenge.status === 'pending' && now < challenge.expiresAt)
-            await this.repository.recordFailure(client, challenge, now);
+          if (challenge && challenge.status === 'pending' && now < challenge.expiresAt) {
+            await this.throttle.enforce(client, {
+              tenantSlug: 'registration',
+              email: challenge.normalizedEmail,
+              ip: input.ip,
+              action: 'otp_verify_failure',
+              now,
+              correlationId: input.correlationId,
+            });
+            await this.repository.recordFailure(client, challenge, now, {
+              eventId: randomUUID(),
+              correlationId: input.correlationId,
+            });
+          }
           return false;
         }
         await this.repository.completeRegistration(client, challenge, now, ids, expiresAt);

@@ -56,6 +56,14 @@ describe.runIf(enabled)('outbox delivery', () => {
     expect(row.status).toBe('delivered');
     expect(row.envelope_ciphertext).toBeNull();
     expect(row.payload_purged_at).not.toBeNull();
+    expect(
+      (
+        await pool.query(
+          `SELECT count(*)::int count FROM audit.security_events WHERE challenge_id=$1 AND event_type='email_delivery' AND outcome='succeeded'`,
+          [started.challengeId],
+        )
+      ).rows[0]?.count,
+    ).toBe(1);
   });
   it('retries transient failures and purges an expired challenge without sending', async () => {
     const started = await new StartRegistrationUseCase(
@@ -107,6 +115,43 @@ describe.runIf(enabled)('outbox delivery', () => {
         )
       ).rows[0],
     ).toEqual({ status: 'expired', envelope_ciphertext: null });
+  });
+  it('recovers an expired worker lease and delivers the item', async () => {
+    const started = await new StartRegistrationUseCase(
+      tx,
+      repository,
+      otp,
+      outbox,
+      throttle,
+      clock,
+      'mailpit',
+    ).execute({
+      tenantName: 'Lease',
+      tenantSlug: 'lease-shop',
+      administratorEmail: 'lease@example.test',
+      ip: '203.0.113.6',
+      correlationId: randomUUID(),
+    });
+    await pool.query(
+      `UPDATE identity.email_outbox SET status='leased',leased_until=clock_timestamp()-interval '1 second' WHERE challenge_id=$1`,
+      [started.challengeId],
+    );
+    let sent = 0;
+    const dispatcher = new OutboxDispatcher(database, tx, outbox, {
+      send: async () => {
+        sent++;
+        return { messageId: 'lease-recovered' };
+      },
+    });
+    expect(await dispatcher.dispatch()).toBe(1);
+    expect(sent).toBe(1);
+    expect(
+      (
+        await pool.query(`SELECT status FROM identity.email_outbox WHERE challenge_id=$1`, [
+          started.challengeId,
+        ])
+      ).rows[0]?.status,
+    ).toBe('delivered');
   });
   afterAll(closeDatabase);
 });

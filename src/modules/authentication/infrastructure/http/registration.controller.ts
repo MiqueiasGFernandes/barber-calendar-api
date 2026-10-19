@@ -1,6 +1,6 @@
-import { Body, Controller, Headers, HttpCode, Inject, Post, Req } from '@nestjs/common';
-import type { FastifyRequest } from 'fastify';
-import { ApplicationError } from '../../../../shared/http/application-error.js';
+import { Body, Controller, HttpCode, Inject, Post, Req, Res } from '@nestjs/common';
+import type { FastifyReply, FastifyRequest } from 'fastify';
+import { ApplicationError } from '../../../../shared/application/application-error.js';
 import type { StartRegistrationUseCase } from '../../application/use-cases/start-registration.use-case.js';
 import { registrationSchema } from './dto/schemas.js';
 export const START_REGISTRATION = Symbol('START_REGISTRATION');
@@ -10,7 +10,7 @@ export class RegistrationController {
   @Post('register') @HttpCode(201) async register(
     @Body() body: unknown,
     @Req() request: FastifyRequest,
-    @Headers('x-correlation-id') correlationId?: string,
+    @Res({ passthrough: true }) reply: FastifyReply,
   ) {
     const parsed = registrationSchema.safeParse(body);
     if (!parsed.success)
@@ -20,8 +20,9 @@ export class RegistrationController {
       tenantSlug: parsed.data.tenant_slug,
       administratorEmail: parsed.data.administrator_email,
       ip: request.ip,
-      correlationId: correlationId ?? request.id,
+      correlationId: request.id,
     });
+    reply.header('Location', `/v1/tenants/registration-attempts/${result.registrationAttemptId}`);
     return {
       registration_attempt_id: result.registrationAttemptId,
       status: result.status,

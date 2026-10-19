@@ -1,13 +1,10 @@
 import type { Queryable } from '../../../../shared/database/postgres-pool.js';
+import type {
+  AuthorizedSession,
+  SessionAuthorizer,
+} from '../../application/ports/session-authorizer.js';
 
-export interface AuthorizedSession {
-  userId: string;
-  tenantId: string;
-  membershipId: string;
-  role: 'administrator' | 'member';
-  expiresAt: Date;
-}
-export class TenantRepository {
+export class TenantRepository implements SessionAuthorizer {
   constructor(private readonly database: Queryable) {}
   async authorizeSession(sessionId: string, tenantId?: string): Promise<AuthorizedSession | null> {
     const result = await this.database.query<AuthorizedSession>(

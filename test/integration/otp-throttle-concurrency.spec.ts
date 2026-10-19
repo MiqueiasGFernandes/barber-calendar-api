@@ -1,16 +1,25 @@
-import { describe, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
-describe('throttle concurrency', () => {
-  it('locks subjects deterministically and counts moving windows atomically', () => {
-    const source = readFileSync(
-      'src/modules/authentication/infrastructure/persistence/throttle.repository.ts',
-      'utf8',
+import { afterAll, beforeEach, describe, expect, it } from 'vitest';
+import { closeDatabase, clock, resetDatabase, throttle, tx } from '../e2e/support.js';
+
+describe.runIf(Boolean(process.env.DATABASE_URL))('throttle concurrency', () => {
+  beforeEach(resetDatabase);
+  it('serializes 100 simultaneous decisions at the email limit', async () => {
+    const decisions = await Promise.allSettled(
+      Array.from({ length: 100 }, (_, index) =>
+        tx.run((client) =>
+          throttle.enforce(client, {
+            tenantSlug: `tenant-${index}`,
+            email: 'concurrent@example.test',
+            ip: `198.18.10.${index}`,
+            action: 'otp_issue',
+            now: clock.now(),
+            correlationId: '10000000-0000-4000-8000-000000000102',
+          }),
+        ),
+      ),
     );
-    expect(source).toMatch(/sort\(\(a,\s*b\)\s*=>\s*Buffer\.compare\(a\.digest,\s*b\.digest\)\)/);
-    expect(source).toContain('FOR UPDATE');
-    expect(source).toContain('occurred_at>$3');
-    expect(source.indexOf('SELECT count')).toBeLessThan(
-      source.indexOf('INSERT INTO identity.throttle_events'),
-    );
+    expect(decisions.filter((decision) => decision.status === 'fulfilled')).toHaveLength(5);
+    expect(decisions.filter((decision) => decision.status === 'rejected')).toHaveLength(95);
   });
+  afterAll(closeDatabase);
 });

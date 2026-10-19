@@ -120,6 +120,7 @@ Se os E2E compartilham um banco, execute-os serialmente. Testes de corrida usam 
 - Confirme que desafio expirado ou substituído não é enviado.
 - Confirme `Idempotency-Key` igual ao ID da outbox e expurgo do envelope em estado terminal.
 - Confirme que banco, logs, traces e respostas não contêm OTP legível, JWT, chaves, envelope decriptado, e-mail ou IP bruto desnecessário.
+- Confirme que a API e o worker emitem spans associados ao correlation ID, logs JSON com trace/span IDs e métricas com rótulos finitos. Para exportação, configure `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` e `OTEL_EXPORTER_OTLP_METRICS_ENDPOINT` conforme `docs/deployment.md`.
 
 ## Validar drift do schema
 

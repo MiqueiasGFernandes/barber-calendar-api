@@ -1,21 +1,22 @@
 import { randomUUID } from 'node:crypto';
+import { performance } from 'node:perf_hooks';
 import type { Clock } from '../../../../shared/application/ports/clock.js';
 import type {
   OtpDigest,
   OtpGenerator,
 } from '../../../../shared/application/ports/otp-generator.js';
-import type { TransactionRunner } from '../../../../shared/database/transaction-runner.js';
-import type { OutboxCryptoAdapter } from '../../../../shared/infrastructure/crypto/outbox-crypto.adapter.js';
-import { ApplicationError } from '../../../../shared/http/application-error.js';
+import type { TransactionManager } from '../../../../shared/application/ports/transaction.js';
+import type { OutboxEnvelopeCipher } from '../../../../shared/application/ports/outbox-envelope.js';
+import { ApplicationError } from '../../../../shared/application/application-error.js';
 import type { OtpThrottleService } from '../services/otp-throttle.service.js';
-import type { RegistrationRepository } from '../../infrastructure/persistence/registration.repository.js';
+import type { AuthenticationRepository } from '../ports/authentication.repository.js';
 
 export class RequestLoginOtpUseCase {
   constructor(
-    private readonly tx: TransactionRunner,
-    private readonly repository: RegistrationRepository,
+    private readonly tx: TransactionManager,
+    private readonly repository: AuthenticationRepository,
     private readonly otp: OtpGenerator & OtpDigest,
-    private readonly outbox: OutboxCryptoAdapter,
+    private readonly outbox: OutboxEnvelopeCipher,
     private readonly throttle: OtpThrottleService,
     private readonly clock: Clock,
     private readonly provider: string,
@@ -31,54 +32,72 @@ export class RequestLoginOtpUseCase {
     if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(tenantSlug) || !/^\S+@\S+\.\S+$/.test(normalizedEmail))
       throw new ApplicationError(422, 'validation_failed', 'Invalid request');
     const now = this.clock.now(),
-      publicChallengeId = randomUUID();
-    await this.tx.run(async (client) => {
-      await this.throttle.enforce(client, {
-        tenantSlug,
-        email: normalizedEmail,
-        ip: input.ip,
-        action: 'otp_issue',
-        now,
+      publicChallengeId = randomUUID(),
+      started = performance.now(),
+      code = this.otp.generate(),
+      codeDigest = this.otp.digest(publicChallengeId, 'login', code),
+      envelope = this.outbox.encrypt({
+        to: normalizedEmail,
+        subject: 'Seu código de acesso',
+        text: `Seu código é ${code}`,
       });
-      const identity = await this.repository.findActiveLoginIdentity(
-        client,
-        tenantSlug,
-        normalizedEmail,
-      );
-      if (!identity) return; // intentionally indistinguishable public result
-      const recent = await client.query(
-        `SELECT 1 FROM identity.otp_challenges WHERE user_id=$1 AND tenant_id=$2 AND issued_at>$3 AND status='pending'`,
-        [identity.userId, identity.tenantId, new Date(now.getTime() - 60_000)],
-      );
-      if ((recent.rowCount ?? 0) > 0) return;
-      await this.repository.supersedeLoginChallenges(
-        client,
-        identity.userId,
-        identity.tenantId,
-        now,
-      );
-      const code = this.otp.generate();
-      await this.repository.insertLoginChallenge(client, {
+    try {
+      await this.tx.run(async (client) => {
+        await this.throttle.enforce(client, {
+          tenantSlug,
+          email: normalizedEmail,
+          ip: input.ip,
+          action: 'otp_issue',
+          now,
+          correlationId: input.correlationId,
+        });
+        const identity = await this.repository.findActiveLoginIdentity(
+          client,
+          tenantSlug,
+          normalizedEmail,
+        );
+        if (!identity) return; // intentionally indistinguishable public result
+        if (
+          await this.repository.hasRecentLoginChallenge(
+            client,
+            identity.userId,
+            identity.tenantId,
+            new Date(now.getTime() - 60_000),
+          )
+        )
+          return;
+        await this.repository.supersedeLoginChallenges(
+          client,
+          identity.userId,
+          identity.tenantId,
+          now,
+        );
+        await this.repository.insertLoginChallenge(client, {
+          challengeId: publicChallengeId,
+          outboxId: randomUUID(),
+          eventId: randomUUID(),
+          correlationId: input.correlationId,
+          identity,
+          normalizedEmail,
+          originDigest: this.throttle.digest(input.ip),
+          codeDigest,
+          keyVersion: 1,
+          issuedAt: now,
+          expiresAt: new Date(now.getTime() + 600_000),
+          envelope,
+          envelopeKeyVersion: this.outbox.keyVersion,
+          provider: this.provider,
+        });
+      });
+      return {
+        status: 'accepted',
         challengeId: publicChallengeId,
-        outboxId: randomUUID(),
-        eventId: randomUUID(),
-        correlationId: input.correlationId,
-        identity,
-        normalizedEmail,
-        originDigest: this.throttle.digest(input.ip),
-        codeDigest: this.otp.digest(publicChallengeId, 'login', code),
-        keyVersion: 1,
-        issuedAt: now,
-        expiresAt: new Date(now.getTime() + 600_000),
-        envelope: this.outbox.encrypt({
-          to: identity.email,
-          subject: 'Seu código de acesso',
-          text: `Seu código é ${code}`,
-        }),
-        envelopeKeyVersion: this.outbox.keyVersion,
-        provider: this.provider,
-      });
-    });
-    return { status: 'accepted', challengeId: publicChallengeId, expiresIn: 600, resendAfter: 60 };
+        expiresIn: 600,
+        resendAfter: 60,
+      };
+    } finally {
+      const remaining = 75 - (performance.now() - started);
+      if (remaining > 0) await new Promise((resolve) => setTimeout(resolve, remaining));
+    }
   }
 }

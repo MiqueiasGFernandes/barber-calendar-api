@@ -38,7 +38,17 @@ export default tseslint.config(
     rules: {
       'no-restricted-imports': [
         'error',
-        { patterns: ['@nestjs/*', '@fastify/*', 'fastify', 'pg'] },
+        {
+          patterns: [
+            '@nestjs/*',
+            '@fastify/*',
+            'fastify',
+            'pg',
+            '**/infrastructure/**',
+            '**/shared/database/**',
+            '**/shared/http/**',
+          ],
+        },
       ],
     },
   },

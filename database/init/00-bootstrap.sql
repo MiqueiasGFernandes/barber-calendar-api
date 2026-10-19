@@ -1,4 +1,10 @@
 \set ON_ERROR_STOP on
+\getenv BARBER_RUNTIME_PASSWORD BARBER_RUNTIME_PASSWORD
+\if :{?BARBER_RUNTIME_PASSWORD}
+\else
+  \echo 'BARBER_RUNTIME_PASSWORD is required' >&2
+  \quit false
+\endif
 \if :{?BARBER_DATABASE}
 \else
   \set BARBER_DATABASE barber_calendar_e2e
@@ -15,4 +21,3 @@ BEGIN;
 \ir /opt/app-sql/schema/090_schema_manifest.sql
 \ir /opt/app-sql/schema/090_grants.sql
 COMMIT;
-

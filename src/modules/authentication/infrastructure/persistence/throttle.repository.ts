@@ -1,14 +1,14 @@
 import { randomUUID } from 'node:crypto';
-import type { Queryable } from '../../../../shared/database/postgres-pool.js';
+import type { TransactionContext } from '../../../../shared/application/ports/transaction.js';
+import type {
+  ThrottleAction,
+  ThrottleLimit,
+  ThrottleRepositoryPort,
+} from '../../application/ports/throttle.repository.js';
 
-export type ThrottleAction = 'registration' | 'otp_issue' | 'otp_verify_failure';
-export interface ThrottleLimit {
-  windowSeconds: number;
-  maximum: number;
-}
-export class ThrottleRepository {
+export class ThrottleRepository implements ThrottleRepositoryPort {
   async consume(
-    client: Queryable,
+    client: TransactionContext,
     subjects: readonly { scopeType: 'tenant_email' | 'ip'; digest: Buffer; limit: ThrottleLimit }[],
     action: ThrottleAction,
     now: Date,

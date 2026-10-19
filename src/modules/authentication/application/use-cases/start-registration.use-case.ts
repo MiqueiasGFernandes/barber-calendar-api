@@ -4,11 +4,11 @@ import type {
   OtpDigest,
   OtpGenerator,
 } from '../../../../shared/application/ports/otp-generator.js';
-import type { TransactionRunner } from '../../../../shared/database/transaction-runner.js';
-import type { OutboxCryptoAdapter } from '../../../../shared/infrastructure/crypto/outbox-crypto.adapter.js';
-import { ApplicationError } from '../../../../shared/http/application-error.js';
+import type { TransactionManager } from '../../../../shared/application/ports/transaction.js';
+import type { OutboxEnvelopeCipher } from '../../../../shared/application/ports/outbox-envelope.js';
+import { ApplicationError } from '../../../../shared/application/application-error.js';
 import type { OtpThrottleService } from '../services/otp-throttle.service.js';
-import type { RegistrationRepository } from '../../infrastructure/persistence/registration.repository.js';
+import type { AuthenticationRepository } from '../ports/authentication.repository.js';
 
 export interface StartRegistrationInput {
   tenantName: string;
@@ -19,10 +19,10 @@ export interface StartRegistrationInput {
 }
 export class StartRegistrationUseCase {
   constructor(
-    private readonly tx: TransactionRunner,
-    private readonly repository: RegistrationRepository,
+    private readonly tx: TransactionManager,
+    private readonly repository: AuthenticationRepository,
     private readonly otp: OtpGenerator & OtpDigest,
-    private readonly outbox: OutboxCryptoAdapter,
+    private readonly outbox: OutboxEnvelopeCipher,
     private readonly throttle: OtpThrottleService,
     private readonly clock: Clock,
     private readonly provider: string,
@@ -51,14 +51,28 @@ export class StartRegistrationUseCase {
       attemptId = randomUUID(),
       challengeId = randomUUID(),
       code = this.otp.generate();
-    await this.tx.run(async (client) => {
+    const selected = await this.tx.run(async (client) => {
       await this.throttle.enforce(client, {
         tenantSlug,
         email: normalizedEmail,
         ip: input.ip,
-        action: 'registration',
+        action: 'otp_issue',
         now,
+        correlationId: input.correlationId,
       });
+      const recent = await this.repository.findRecentRegistration(
+        client,
+        tenantSlug,
+        normalizedEmail,
+        new Date(now.getTime() - 60_000),
+      );
+      if (recent) return recent;
+      await this.repository.supersedeRegistrationChallenges(
+        client,
+        tenantSlug,
+        normalizedEmail,
+        now,
+      );
       await this.repository.insertProvisional(client, {
         attemptId,
         challengeId,
@@ -83,11 +97,12 @@ export class StartRegistrationUseCase {
         envelopeKeyVersion: this.outbox.keyVersion,
         provider: this.provider,
       });
+      return { attemptId, challengeId };
     });
     return {
-      registrationAttemptId: attemptId,
+      registrationAttemptId: selected.attemptId,
       status: 'verification_required',
-      challengeId,
+      challengeId: selected.challengeId,
       expiresIn: 600,
       resendAfter: 60,
     };

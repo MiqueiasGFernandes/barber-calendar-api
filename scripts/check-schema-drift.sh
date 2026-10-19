@@ -2,6 +2,14 @@
 set -eu
 project="${COMPOSE_PROJECT_NAME:-barber-schema-check}"
 export E2E_DB_PORT="${E2E_DB_PORT:-55433}"
+if [ -z "${BARBER_RUNTIME_PASSWORD:-}" ]; then
+  BARBER_RUNTIME_PASSWORD="$(node -e "process.stdout.write(require('node:crypto').randomBytes(24).toString('hex'))")"
+fi
+export BARBER_RUNTIME_PASSWORD
+if [ -z "${POSTGRES_ADMIN_PASSWORD:-}" ]; then
+  POSTGRES_ADMIN_PASSWORD="$(node -e "process.stdout.write(require('node:crypto').randomBytes(24).toString('hex'))")"
+fi
+export POSTGRES_ADMIN_PASSWORD
 temporary="$(mktemp -d)"
 cleanup(){ docker compose -p "$project" -f compose.e2e.yaml down -v --remove-orphans >/dev/null 2>&1 || true; rm -rf "$temporary"; }
 trap cleanup EXIT INT TERM

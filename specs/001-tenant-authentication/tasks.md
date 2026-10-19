@@ -213,3 +213,23 @@ Cada história começa pelos testes falhando, preserva contratos e constraints, 
 - Todo SQL de schema é manual e versionado; ORM migrations, migration runners, schema sync e DDL no startup são proibidos.
 - O script E2E deve encerrar o Compose com volume efêmero mesmo quando testes falharem.
 - O formato checklist das tarefas é `- [ ] T### [P?] [US#?] Descrição com caminhos de arquivo`.
+
+## Phase 6: Convergence
+
+- [X] T075 CRITICAL: Remover a credencial fixa de `barber_runtime` de `database/schema/010_schemas.sql`, provisionar autenticação por segredo externo e validar o bootstrap sem expor credenciais per Constitution IV (contradicts)
+- [X] T076 CRITICAL: Introduzir portas de aplicação para persistência/autorizacão, fazer os casos de uso dependerem somente dessas portas e reforçar os testes/lint da direção de dependências per Constitution III (contradicts)
+- [X] T077 CRITICAL: Substituir testes baseados em leitura de código e casos de uso isolados por cenários reproduzíveis que subam API, worker, PostgreSQL e Mailpit e atravessem os contratos HTTP e fluxos de entrega per Constitution V (partial)
+- [X] T078 Normalizar ou gerar um UUID de correlação na borda HTTP, propagá-lo por resposta, logs e auditoria e cobrir requisições sem header ou com header inválido per US1/AC1 (partial)
+- [X] T079 Resolver a finalidade do desafio sem executar o verificador incorreto, garantindo que login válido não registre falha e que cada tentativa inválida incremente o desafio exatamente uma vez per FR-009 (contradicts)
+- [X] T080 Aplicar os limites cumulativos de dez falhas por e-mail normalizado e cinquenta por IP também à verificação de cadastro, propagando a origem confiável até o caso de uso per FR-009 (missing)
+- [X] T081 Corrigir a modelagem dos sujeitos/eventos de throttle para acumular limites por e-mail normalizado independentemente de tenant, desafio ou reemissão e compartilhar o limite aplicável entre fluxos de emissão per FR-014 (partial)
+- [X] T082 Restringir proxies confiáveis e derivar o IP efetivo sem permitir falsificação de `X-Forwarded-For`, com testes de bypass dos limites por origem per FR-009 (partial)
+- [X] T083 Aplicar cooldown de 60 segundos e substituir desafios de cadastro pendentes equivalentes para que somente o OTP mais recente possa funcionar per FR-008 (partial)
+- [X] T084 Executar trabalho observavelmente equivalente para identidades elegíveis e inelegíveis e adicionar testes estatísticos contra enumeração temporal per FR-012 (partial)
+- [X] T085 Reivindicar novamente itens da outbox cujo `leased_until` expirou, preservando idempotência, retry/backoff e expurgo terminal após queda de worker per FR-013 (partial)
+- [X] T086 Persistir eventos de segurança para sucessos, rejeições, throttling e falhas relevantes de cadastro, login e entrega por meio de `SecurityEventWriter`, sem dados sensíveis per SC-009 (partial)
+- [X] T087 Implementar validação OpenAPI 3.1 real de requests/responses, geração verificável dos tipos de transporte e testes Fastify dos status, `Location`, `Retry-After` e Problem Details per FR-017 (partial)
+- [X] T088 Criar teste concorrente com 100 conclusões independentes disputando o mesmo e-mail normalizado ou slug e provar uma única criação definitiva sem estado parcial per SC-003 (partial)
+- [X] T089 Adicionar teste de desempenho reproduzível que meça p95 das decisões OTP sob 100 tentativas simultâneas e falhe acima de dois segundos per SC-002 (missing)
+- [X] T090 Integrar métricas de baixa cardinalidade, logs correlacionados e tracing OpenTelemetry aos fluxos reais de API/worker e verificar redação de OTP, JWT, e-mail, IP e envelopes em toda a telemetria per T071/T072 (partial)
+- [X] T091 Registrar e executar `ThrottleRetentionJob` em processo apropriado, com coordenação segura entre instâncias e teste de preservação de eventos ainda contados per T065 (partial)

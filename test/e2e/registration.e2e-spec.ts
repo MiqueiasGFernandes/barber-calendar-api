@@ -24,6 +24,7 @@ describe.runIf(enabled)('registration journey', () => {
       repository,
       otp,
       { issue: async () => 'signed.jwt' },
+      throttle,
       clock,
       86400,
     );
@@ -49,6 +50,7 @@ describe.runIf(enabled)('registration journey', () => {
     const result = await useCase.execute({
       challengeId: initiated.challengeId,
       code: '123456',
+      ip: '203.0.113.1',
       correlationId: '10000000-0000-4000-8000-000000000002',
     });
     expect(result).toEqual({ accessToken: 'signed.jwt', tokenType: 'Bearer', expiresIn: 86400 });
@@ -60,6 +62,7 @@ describe.runIf(enabled)('registration journey', () => {
       useCase.execute({
         challengeId: initiated.challengeId,
         code: '123456',
+        ip: '203.0.113.1',
         correlationId: '10000000-0000-4000-8000-000000000003',
       }),
     ).rejects.toMatchObject({ status: 401 });
@@ -78,6 +81,7 @@ describe.runIf(enabled)('registration journey', () => {
         useCase.execute({
           challengeId: initiated.challengeId,
           code: '000000',
+          ip: '203.0.113.20',
           correlationId: randomUUID(),
         }),
       ).rejects.toMatchObject({ status: 401 });
@@ -86,6 +90,46 @@ describe.runIf(enabled)('registration journey', () => {
       [initiated.challengeId],
     );
     expect(challenge.rows[0]).toEqual({ status: 'locked', failed_attempts: 5 });
+    const events = await pool.query(
+      `SELECT count(*)::int count FROM audit.security_events WHERE event_type='otp_verification' AND outcome='rejected'`,
+    );
+    expect(events.rows[0]?.count).toBe(5);
+  });
+  it('applies the resend cooldown and supersedes an older registration challenge', async () => {
+    let now = clock.now();
+    const mutableClock = { now: () => new Date(now) };
+    const useCase = new StartRegistrationUseCase(
+      tx,
+      repository,
+      otp,
+      outbox,
+      throttle,
+      mutableClock,
+      'mailpit',
+    );
+    const input = {
+      tenantName: 'Reenvio',
+      tenantSlug: 'resend-shop',
+      administratorEmail: 'resend@example.test',
+      ip: '203.0.113.22',
+      correlationId: randomUUID(),
+    };
+    const first = await useCase.execute(input);
+    const immediate = await useCase.execute({ ...input, correlationId: randomUUID() });
+    expect(immediate.challengeId).toBe(first.challengeId);
+    expect(
+      (await pool.query(`SELECT count(*)::int count FROM identity.email_outbox`)).rows[0]?.count,
+    ).toBe(1);
+    now = new Date(now.getTime() + 60_001);
+    const second = await useCase.execute({ ...input, correlationId: randomUUID() });
+    expect(second.challengeId).not.toBe(first.challengeId);
+    expect(
+      (
+        await pool.query(`SELECT status FROM identity.otp_challenges WHERE id=$1`, [
+          first.challengeId,
+        ])
+      ).rows[0]?.status,
+    ).toBe('superseded');
   });
   it('allows exactly one of 100 concurrent confirmations', async () => {
     const initiated = await start().execute({
@@ -101,6 +145,7 @@ describe.runIf(enabled)('registration journey', () => {
         useCase.execute({
           challengeId: initiated.challengeId,
           code: '123456',
+          ip: '203.0.113.21',
           correlationId: randomUUID(),
         }),
       ),
@@ -110,6 +155,55 @@ describe.runIf(enabled)('registration journey', () => {
       `SELECT (SELECT count(*) FROM tenancy.tenants)::int tenants,(SELECT count(*) FROM identity.authenticated_sessions)::int sessions`,
     );
     expect(final.rows[0]).toEqual({ tenants: 1, sessions: 1 });
+  });
+  it('allows only one of 100 independent attempts competing for the same slug', async () => {
+    const slug = 'slug-race-shop';
+    const now = clock.now();
+    const candidates = Array.from({ length: 100 }, () => ({
+      attemptId: randomUUID(),
+      challengeId: randomUUID(),
+      email: `race-${randomUUID()}@example.test`,
+    }));
+    for (const candidate of candidates) {
+      await pool.query(
+        `INSERT INTO identity.registration_attempts(id,tenant_name,tenant_slug,administrator_email,normalized_email,expires_at,created_at)
+        VALUES($1,'Slug race',$2,$3,$3,$4,$5)`,
+        [candidate.attemptId, slug, candidate.email, new Date(now.getTime() + 600_000), now],
+      );
+      await pool.query(
+        `INSERT INTO identity.otp_challenges(id,purpose,registration_attempt_id,normalized_email,origin_digest,code_digest,key_version,issued_at,expires_at)
+        VALUES($1,'registration',$2,$3,$4,$5,1,$6,$7)`,
+        [
+          candidate.challengeId,
+          candidate.attemptId,
+          candidate.email,
+          Buffer.alloc(32),
+          otp.digest(candidate.challengeId, 'registration', '123456'),
+          now,
+          new Date(now.getTime() + 600_000),
+        ],
+      );
+    }
+    const useCase = verify();
+    const results = await Promise.allSettled(
+      candidates.map((candidate) =>
+        useCase.execute({
+          challengeId: candidate.challengeId,
+          code: '123456',
+          ip: '203.0.113.23',
+          correlationId: randomUUID(),
+        }),
+      ),
+    );
+    expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
+    expect(results.filter((result) => result.status === 'rejected')).toHaveLength(99);
+    expect(
+      (
+        await pool.query(
+          `SELECT (SELECT count(*) FROM tenancy.tenants)::int tenants,(SELECT count(*) FROM identity.user_accounts)::int users,(SELECT count(*) FROM tenancy.tenant_memberships)::int memberships,(SELECT count(*) FROM identity.authenticated_sessions)::int sessions`,
+        )
+      ).rows[0],
+    ).toEqual({ tenants: 1, users: 1, memberships: 1, sessions: 1 });
   });
   afterAll(closeDatabase);
 });

@@ -1,30 +1,45 @@
-import type { PoolClient } from 'pg';
+import type { TransactionContext } from '../../../../shared/application/ports/transaction.js';
+import type {
+  ActiveLoginIdentity,
+  AuthenticationRepository,
+  LockedChallenge,
+} from '../../application/ports/authentication.repository.js';
 
-export interface ActiveLoginIdentity {
-  userId: string;
-  tenantId: string;
-  membershipId: string;
-  role: 'administrator' | 'member';
-  email: string;
-}
-export interface LockedChallenge {
-  id: string;
-  purpose: 'registration' | 'login';
-  status: string;
-  codeDigest: Buffer;
-  keyVersion: number;
-  expiresAt: Date;
-  failedAttempts: number;
-  registrationAttemptId: string | null;
-  userId: string | null;
-  tenantId: string | null;
-  membershipId: string | null;
-  normalizedEmail: string;
-}
+export class RegistrationRepository implements AuthenticationRepository {
+  async findRecentRegistration(
+    client: TransactionContext,
+    tenantSlug: string,
+    normalizedEmail: string,
+    since: Date,
+  ): Promise<{ attemptId: string; challengeId: string } | null> {
+    const result = await client.query<{ attemptId: string; challengeId: string }>(
+      `SELECT a.id AS "attemptId",c.id AS "challengeId"
+      FROM identity.registration_attempts a JOIN identity.otp_challenges c ON c.registration_attempt_id=a.id
+      WHERE a.tenant_slug=$1 AND a.normalized_email=$2 AND a.status='pending'
+        AND c.status='pending' AND c.issued_at>$3
+      ORDER BY c.issued_at DESC LIMIT 1`,
+      [tenantSlug, normalizedEmail, since],
+    );
+    return result.rows[0] ?? null;
+  }
 
-export class RegistrationRepository {
+  async supersedeRegistrationChallenges(
+    client: TransactionContext,
+    tenantSlug: string,
+    normalizedEmail: string,
+    now: Date,
+  ): Promise<void> {
+    await client.query(
+      `UPDATE identity.otp_challenges c SET status='superseded',superseded_at=$3
+      FROM identity.registration_attempts a
+      WHERE c.registration_attempt_id=a.id AND a.tenant_slug=$1 AND a.normalized_email=$2
+        AND a.status='pending' AND c.purpose='registration' AND c.status='pending'`,
+      [tenantSlug, normalizedEmail, now],
+    );
+  }
+
   async insertProvisional(
-    client: PoolClient,
+    client: TransactionContext,
     input: {
       attemptId: string;
       challengeId: string;
@@ -97,7 +112,7 @@ export class RegistrationRepository {
   }
 
   async findActiveLoginIdentity(
-    client: PoolClient,
+    client: TransactionContext,
     tenantSlug: string,
     normalizedEmail: string,
   ): Promise<ActiveLoginIdentity | null> {
@@ -112,7 +127,7 @@ export class RegistrationRepository {
   }
 
   async supersedeLoginChallenges(
-    client: PoolClient,
+    client: TransactionContext,
     userId: string,
     tenantId: string,
     now: Date,
@@ -124,8 +139,21 @@ export class RegistrationRepository {
     );
   }
 
+  async hasRecentLoginChallenge(
+    client: TransactionContext,
+    userId: string,
+    tenantId: string,
+    since: Date,
+  ): Promise<boolean> {
+    const result = await client.query(
+      `SELECT 1 FROM identity.otp_challenges WHERE user_id=$1 AND tenant_id=$2 AND issued_at>$3 AND status='pending'`,
+      [userId, tenantId, since],
+    );
+    return (result.rowCount ?? 0) > 0;
+  }
+
   async insertLoginChallenge(
-    client: PoolClient,
+    client: TransactionContext,
     input: {
       challengeId: string;
       outboxId: string;
@@ -188,7 +216,7 @@ export class RegistrationRepository {
     );
   }
 
-  async lockChallenge(client: PoolClient, id: string): Promise<LockedChallenge | null> {
+  async lockChallenge(client: TransactionContext, id: string): Promise<LockedChallenge | null> {
     const result = await client.query<LockedChallenge>(
       `SELECT id,purpose,status,code_digest AS "codeDigest",key_version AS "keyVersion",
       expires_at AS "expiresAt",failed_attempts AS "failedAttempts",registration_attempt_id AS "registrationAttemptId",
@@ -199,17 +227,38 @@ export class RegistrationRepository {
     return result.rows[0] ?? null;
   }
 
-  async recordFailure(client: PoolClient, challenge: LockedChallenge, now: Date): Promise<void> {
+  async findChallengePurpose(
+    client: TransactionContext,
+    id: string,
+  ): Promise<'registration' | 'login' | null> {
+    const result = await client.query<{ purpose: 'registration' | 'login' }>(
+      'SELECT purpose FROM identity.otp_challenges WHERE id=$1',
+      [id],
+    );
+    return result.rows[0]?.purpose ?? null;
+  }
+
+  async recordFailure(
+    client: TransactionContext,
+    challenge: LockedChallenge,
+    now: Date,
+    audit: { eventId: string; correlationId: string },
+  ): Promise<void> {
     const failures = Math.min(challenge.failedAttempts + 1, 5);
     await client.query(
       `UPDATE identity.otp_challenges SET failed_attempts=$2::smallint,status=CASE WHEN $2::smallint>=5 THEN 'locked' ELSE status END,
       locked_at=CASE WHEN $2::smallint>=5 THEN $3 ELSE locked_at END WHERE id=$1`,
       [challenge.id, failures, now],
     );
+    await client.query(
+      `INSERT INTO audit.security_events(id,event_type,outcome,occurred_at,correlation_id,tenant_id,actor_user_id,challenge_id,reason_code)
+      VALUES($1,'otp_verification','rejected',$2,$3,$4,$5,$6,'invalid_otp')`,
+      [audit.eventId, now, audit.correlationId, challenge.tenantId, challenge.userId, challenge.id],
+    );
   }
 
   async completeRegistration(
-    client: PoolClient,
+    client: TransactionContext,
     challenge: LockedChallenge,
     now: Date,
     ids: {
@@ -265,7 +314,7 @@ export class RegistrationRepository {
   }
 
   async completeLogin(
-    client: PoolClient,
+    client: TransactionContext,
     challenge: LockedChallenge,
     now: Date,
     ids: { sessionId: string; jti: string; eventId: string; correlationId: string },
@@ -301,14 +350,14 @@ export class RegistrationRepository {
     return identity;
   }
 
-  private async consume(client: PoolClient, id: string, now: Date): Promise<void> {
+  private async consume(client: TransactionContext, id: string, now: Date): Promise<void> {
     await client.query(
       `UPDATE identity.otp_challenges SET status='consumed',consumed_at=$2 WHERE id=$1 AND status='pending'`,
       [id, now],
     );
   }
   private async insertSession(
-    client: PoolClient,
+    client: TransactionContext,
     input: {
       sessionId: string;
       jti: string;
@@ -335,7 +384,7 @@ export class RegistrationRepository {
     );
   }
   private async insertSuccessEvent(
-    client: PoolClient,
+    client: TransactionContext,
     input: {
       eventId: string;
       correlationId: string;

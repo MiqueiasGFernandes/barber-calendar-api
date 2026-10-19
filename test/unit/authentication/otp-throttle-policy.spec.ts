@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { Queryable } from '../../../src/shared/database/postgres-pool.js';
+import type { TransactionContext } from '../../../src/shared/application/ports/transaction.js';
 import { OtpThrottleService } from '../../../src/modules/authentication/application/services/otp-throttle.service.js';
-import type { ThrottleRepository } from '../../../src/modules/authentication/infrastructure/persistence/throttle.repository.js';
+import type { ThrottleRepositoryPort } from '../../../src/modules/authentication/application/ports/throttle.repository.js';
 describe('OTP throttle policy', () => {
   it('uses opaque stable subjects and separates scopes', () => {
-    const service = new OtpThrottleService({} as ThrottleRepository, 'k'.repeat(32));
+    const service = new OtpThrottleService({} as ThrottleRepositoryPort, 'k'.repeat(32));
     expect(service.digest('tenant\0email')).toHaveLength(32);
     expect(service.digest('tenant\0email').equals(service.digest('tenant\0email'))).toBe(true);
     expect(service.digest('tenant\0email').equals(service.digest('ip'))).toBe(false);
@@ -12,11 +12,11 @@ describe('OTP throttle policy', () => {
   it('returns a uniform rate-limit error', async () => {
     const consume = vi.fn().mockResolvedValue(37),
       service = new OtpThrottleService(
-        { consume } as unknown as ThrottleRepository,
+        { consume } as unknown as ThrottleRepositoryPort,
         'k'.repeat(32),
       );
     await expect(
-      service.enforce({} as Queryable, {
+      service.enforce({} as TransactionContext, {
         tenantSlug: 'tenant',
         email: 'a@b.test',
         ip: '127.0.0.1',
