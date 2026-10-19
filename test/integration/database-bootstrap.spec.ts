@@ -5,7 +5,7 @@ describe.runIf(enabled)('database bootstrap', () => {
   const pool = new Pool({ connectionString: process.env.DATABASE_URL });
   it('materializes the supported schema revision and all canonical relations', async () => {
     const revision = await pool.query(`SELECT revision FROM app_meta.schema_build WHERE singleton`);
-    expect(revision.rows[0]?.revision).toBe('002-appointment-scheduling-v1');
+    expect(revision.rows[0]?.revision).toBe('002-appointment-scheduling-v2');
     for (const relation of [
       'tenancy.tenants',
       'identity.user_accounts',

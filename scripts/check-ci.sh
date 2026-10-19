@@ -3,6 +3,7 @@ set -eu
 
 yarn lint
 yarn typecheck
+yarn build
 yarn test:unit
 yarn test:contract
 yarn contract:check

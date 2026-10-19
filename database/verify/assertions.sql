@@ -23,8 +23,17 @@ BEGIN
     ('identity.throttle_window_idx'),('identity.throttle_retention_idx'),('scheduling.appointments_professional_start_idx'),('scheduling.appointments_status_start_idx'),('scheduling.weekly_periods_lookup_idx'),('scheduling.appointment_events_lookup_idx'),('scheduling.idempotency_scope_unique')
   ) AS x(expected) WHERE to_regclass(expected) IS NULL;
   IF missing IS NOT NULL THEN RAISE EXCEPTION 'missing indexes: %', missing; END IF;
-  IF NOT EXISTS (SELECT FROM app_meta.schema_build WHERE singleton AND revision='002-appointment-scheduling-v1') THEN RAISE EXCEPTION 'schema revision mismatch'; END IF;
+  IF NOT EXISTS (SELECT FROM app_meta.schema_build WHERE singleton AND revision='002-appointment-scheduling-v2') THEN RAISE EXCEPTION 'schema revision mismatch'; END IF;
   IF has_schema_privilege('barber_runtime','identity','CREATE') THEN RAISE EXCEPTION 'runtime can create in identity'; END IF;
   IF has_database_privilege('barber_runtime',current_database(),'CREATE') THEN RAISE EXCEPTION 'runtime can create database objects'; END IF;
   IF has_table_privilege('barber_runtime','scheduling.appointment_events','UPDATE') OR has_table_privilege('barber_runtime','scheduling.appointment_events','DELETE') THEN RAISE EXCEPTION 'runtime can mutate appointment events'; END IF;
+END $$;
+
+DO $$ BEGIN
+ IF (SELECT revision FROM app_meta.schema_build WHERE singleton)<>'002-appointment-scheduling-v2' THEN RAISE EXCEPTION 'expected scheduling v2'; END IF;
+ IF NOT EXISTS(SELECT FROM pg_policies WHERE schemaname='scheduling' AND tablename='configuration_events' AND policyname='configuration_events_reader') THEN RAISE EXCEPTION 'audit RLS missing'; END IF;
+ IF has_table_privilege('barber_runtime','scheduling.configuration_events','SELECT') OR has_table_privilege('barber_runtime','scheduling.configuration_events','UPDATE,DELETE,TRUNCATE') OR NOT has_table_privilege('barber_runtime','scheduling.configuration_events','INSERT') THEN RAISE EXCEPTION 'audit runtime grants invalid'; END IF;
+ IF has_table_privilege('barber_runtime','scheduling.configuration_audit_access','SELECT,INSERT,UPDATE,DELETE,TRUNCATE') THEN RAISE EXCEPTION 'audit ACL exposed'; END IF;
+ IF NOT EXISTS(SELECT FROM pg_class WHERE oid='scheduling.configuration_events'::regclass AND relrowsecurity) OR NOT EXISTS(SELECT FROM pg_class WHERE oid='scheduling.configuration_audit_access'::regclass AND relrowsecurity) THEN RAISE EXCEPTION 'audit RLS disabled'; END IF;
+ IF EXISTS(SELECT FROM pg_roles WHERE rolname='barber_audit_reader' AND (rolcanlogin OR rolsuper OR rolcreaterole OR rolbypassrls)) THEN RAISE EXCEPTION 'unsafe audit reader'; END IF;
 END $$;

@@ -78,7 +78,7 @@ Quando o cliente aceita qualquer profissional, escolher entre os elegíveis pelo
 
 ### Configuração e reservas compartilham a mesma fronteira transacional
 
-**Decisão**: Criar uma linha `scheduling.settings` por tenant, inclusive para tenants existentes no release. Toda mutação de agenda adquire `SELECT ... FOR UPDATE` nessa linha antes de ler configurações, catálogo, jornadas ou compromissos; depois bloqueia os agendamentos afetados em ordem de UUID. Em `READ COMMITTED`, carregar os dados relevantes após adquirir o lock. Todas as operações usam a mesma conexão/transação. GiST continua como proteção adicional.
+**Decisão**: Criar uma linha `scheduling.tenant_settings` por tenant, inclusive para tenants existentes no release. Toda mutação de agenda adquire `SELECT ... FOR UPDATE` nessa linha antes de ler configurações, catálogo, jornadas ou compromissos; depois bloqueia os agendamentos afetados em ordem de UUID. Em `READ COMMITTED`, carregar os dados relevantes após adquirir o lock. Todas as operações usam a mesma conexão/transação. GiST continua como proteção adicional.
 
 **Motivo**: A constraint de intervalos não protege uma reserva de uma pausa criada simultaneamente. Serializar escritas por barbearia torna a validação de FR-014 atômica sem impedir leituras nem bloquear outras barbearias.
 
@@ -109,6 +109,34 @@ Mudanças de jornada, novos bloqueios, desativação, remoção de elegibilidade
 **Motivo**: O nome da zona e o offset do instante são informações distintas. A regra evita ambiguidade mesmo fora do fuso inicial brasileiro.
 
 **Alternativas consideradas**: Fixar offset ou escolher implicitamente um dos horários repetidos; rejeitadas por perder disponibilidade ou reservar um instante diferente.
+
+### Auditoria administrativa separada e atômica (FR-023/SC-009)
+
+**Decisão**: Criar `scheduling.configuration_events` para serviços, profissionais, elegibilidade, jornadas, exceções, fuso e settings. Cada comando que realmente altera um agregado produz um evento com autor membership, tenant, operação, recurso, instante, correlação e diff anterior/novo. Criação usa anterior nulo; remoção usa novo nulo; substituição de jornada compara valores semanais canônicos, sem IDs de linhas regeneradas. Mudança de elegibilidade integra o evento do serviço. Comando sem mudança efetiva não cria evento; replay dentro da validade retorna antes do callback e não duplica eventos.
+
+**Motivo**: `appointment_events` exige vínculo com agendamento e tipos específicos. O writer de `audit.security_events` recebe uma conexão independente e não representa valores estruturados de configuração; seu uso direto não garante atomicidade. O callback de `IdempotentMutationService.execute` já compartilha conexão, lock e commit com a alteração e o resultado idempotente. Inserir ali garante rollback total se a auditoria ou a gravação da idempotência falhar.
+
+**Alternativas consideradas**: logs/OTLP (não são trilha transacional); resposta idempotente de 24 horas (não é histórico durável); ampliar eventos de agendamento (enfraquece relações e tipos); trigger genérica de todas as tabelas (não dispõe naturalmente do ator, agrupa mal substituições e pode copiar contatos/segredos); publicação após commit (admite mudança sem trilha).
+
+**Fontes locais**: `src/modules/scheduling/application/use-cases/manage-configuration.use-cases.ts`, `src/modules/scheduling/application/services/idempotent-mutation.service.ts`, `src/modules/audit/infrastructure/postgres-security-event-writer.ts`, `database/schema/020_tables.sql` e `database/schema/090_grants.sql`.
+
+### Consulta interna com autorização por login e barbearia
+
+**Decisão**: Não criar endpoint. Operação/suporte usa login PostgreSQL individual autorizado, separado do runtime e sem privilégios de owner/superusuário/BYPASSRLS. Um papel coletivo `barber_audit_reader` NOLOGIN recebe SELECT na trilha, protegido por RLS. `scheduling.configuration_audit_access` vincula `session_user` ao tenant e à expiração da concessão; somente a operação privilegiada concede/revoga acesso. A própria tabela de concessões usa RLS de leitura para mostrar apenas concessões do login da sessão. A política da trilha exige concessão vigente para o tenant de cada linha. Não confiar em parâmetro de sessão modificável pelo consulente como prova de autorização.
+
+**Motivo**: Um simples WHERE informado pelo operador não impede consulta fora do tenant autorizado. `session_user` identifica o login original mesmo com SET ROLE; RLS aplica o escopo também se o filtro de tenant for omitido. Usar privilégios somente de inserção no runtime evita expor o histórico nas rotas existentes. Concessões operacionais não são criadas pelo fluxo de cadastro de tenant e não há acesso implícito de suporte.
+
+**Alternativas consideradas**: owner/credencial do runtime (privilégios amplos); endpoint administrativo (contraria a opção A); variável de tenant sem autorização independente (forjável); identidade externa nova (desnecessária para consulta interna SQL).
+
+**Fontes primárias**: [Políticas RLS](https://www.postgresql.org/docs/18/ddl-rowsecurity.html) descrevem filtragem por linha e exceções para owner/superusuário; [identidades da sessão](https://www.postgresql.org/docs/18/functions-info.html) distingue `session_user` e `current_user`. A aplicação dessas capacidades ao modelo de concessões acima é decisão de projeto. Testar conexões reais de suporte, sem simular apenas SET ROLE de uma sessão superusuária.
+
+### Evolução do schema e continuidade do histórico
+
+**Decisão**: Preservar o release v1 e adicionar `database/releases/002-appointment-scheduling-audit/{up,verify,rollback}.sql`, destino `002-appointment-scheduling-v2`. Bootstrap limpo produz v2; upgrade requer v1. Verificar grants, políticas, constraints, índices, tabelas e revisão nos dois caminhos. Rollback volta somente a v1, preserva dados de agenda e remove a nova trilha/ACL, com perda explícita da auditoria e exportação protegida prévia quando necessária. A operação deve suspender escritas durante a troca de versão/readiness. Nenhum release é aplicado neste comando.
+
+**Motivo**: Os resultados existentes do quickstart e o ensaio SQL dizem respeito a v1. Alterar retroativamente o release testado confundiria o baseline com o incremento ainda não implementado. O histórico começa na ativação v2, sem inventar autores ou estados anteriores de mudanças v1. Concessões de suporte são específicas de cada ambiente e não são copiadas automaticamente no upgrade.
+
+**Alternativas consideradas**: editar v1 retroativamente (perde rastreabilidade); preencher eventos históricos a partir do estado atual (não há autor/transição verificáveis); expurgar auditoria junto com idempotência (viola a finalidade do histórico).
 
 ## Limites conhecidos e riscos residuais
 

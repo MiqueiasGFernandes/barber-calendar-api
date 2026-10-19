@@ -18,6 +18,7 @@ BEGIN;
 \ir /opt/app-sql/schema/020_tables.sql
 \ir /opt/app-sql/schema/030_constraints.sql
 \ir /opt/app-sql/schema/040_indexes.sql
+\ir /opt/app-sql/schema/050_configuration_audit_policies.sql
 \ir /opt/app-sql/schema/090_schema_manifest.sql
 \ir /opt/app-sql/schema/090_grants.sql
 COMMIT;

@@ -9,7 +9,8 @@ INSERT INTO identity.user_accounts(id,email,normalized_email,email_verified_at,s
 ('20000000-0000-4000-8000-000000000002','member-a@example.test','member-a@example.test',now(),'active',now(),now()) ON CONFLICT DO NOTHING;
 INSERT INTO tenancy.tenant_memberships(id,tenant_id,user_id,role,status,created_at,updated_at) VALUES
 ('30000000-0000-4000-8000-000000000001','10000000-0000-4000-8000-000000000001','20000000-0000-4000-8000-000000000001','administrator','active',now(),now()),
-('30000000-0000-4000-8000-000000000002','10000000-0000-4000-8000-000000000001','20000000-0000-4000-8000-000000000002','member','active',now(),now()) ON CONFLICT DO NOTHING;
+('30000000-0000-4000-8000-000000000002','10000000-0000-4000-8000-000000000001','20000000-0000-4000-8000-000000000002','member','active',now(),now()),
+('30000000-0000-4000-8000-000000000003','10000000-0000-4000-8000-000000000002','20000000-0000-4000-8000-000000000001','administrator','active',now(),now()) ON CONFLICT DO NOTHING;
 INSERT INTO scheduling.services(id,tenant_id,name,duration_minutes,price_minor,currency,status,created_at,updated_at) VALUES
 ('40000000-0000-4000-8000-000000000001','10000000-0000-4000-8000-000000000001','Corte de exemplo',30,5000,'BRL','active',now(),now()) ON CONFLICT DO NOTHING;
 INSERT INTO scheduling.professionals(id,tenant_id,name,status,created_at,updated_at) VALUES

@@ -51,6 +51,7 @@ export class AppointmentLifecycleService {
         operation,
         resourceScope: appointmentId,
         key: input.idempotencyKey,
+        correlationId: input.correlationId,
       },
       request,
       async (context, now) => {

@@ -4,14 +4,36 @@ import { IanaTimeZoneAdapter } from '../../../src/modules/scheduling/infrastruct
 describe('IANA time zone adapter', () => {
   const zone = new IanaTimeZoneAdapter();
   it('rejects nonexistent local times and emits both instants in a repeated DST hour', () => {
-    expect(zone.localDateTimeToInstants('2024-03-10T02:30:00','America/New_York')).toHaveLength(0);
-    const repeated = zone.localDateTimeToInstants('2024-11-03T01:30:00','America/New_York');
-    expect(repeated.map((instant) => instant.toISOString())).toEqual(['2024-11-03T05:30:00.000Z','2024-11-03T06:30:00.000Z']);
+    expect(zone.localDateTimeToInstants('2024-03-10T02:30:00', 'America/New_York')).toHaveLength(0);
+    const repeated = zone.localDateTimeToInstants('2024-11-03T01:30:00', 'America/New_York');
+    expect(repeated.map((instant) => instant.toISOString())).toEqual([
+      '2024-11-03T05:30:00.000Z',
+      '2024-11-03T06:30:00.000Z',
+    ]);
   });
   it('converts instants back to an unambiguous local representation and validates IANA zones', () => {
-    expect(zone.instantToLocalDateTime(new Date('2024-11-03T05:30:00Z'),'America/New_York')).toBe('2024-11-03T01:30:00');
-    expect(zone.instantToOffsetDateTime(new Date('2024-11-03T05:30:00Z'),'America/New_York')).toBe('2024-11-03T01:30:00-04:00');
-    expect(zone.instantToOffsetDateTime(new Date('2030-01-07T12:00:00Z'),'UTC')).toBe('2030-01-07T12:00:00+00:00');
+    expect(zone.instantToLocalDateTime(new Date('2024-11-03T05:30:00Z'), 'America/New_York')).toBe(
+      '2024-11-03T01:30:00',
+    );
+    expect(zone.instantToOffsetDateTime(new Date('2024-11-03T05:30:00Z'), 'America/New_York')).toBe(
+      '2024-11-03T01:30:00-04:00',
+    );
+    expect(zone.instantToOffsetDateTime(new Date('2030-01-07T12:00:00Z'), 'UTC')).toBe(
+      '2030-01-07T12:00:00+00:00',
+    );
     expect(zone.isValidTimeZone('Mars/Olympus')).toBe(false);
+  });
+  it('mantém instantes válidos dos dois lados da lacuna sem normalizar o horário inexistente', () => {
+    expect(
+      zone
+        .localDateTimeToInstants('2024-03-10T01:30:00', 'America/New_York')
+        .map((x) => x.toISOString()),
+    ).toEqual(['2024-03-10T06:30:00.000Z']);
+    expect(zone.localDateTimeToInstants('2024-03-10T02:30:00', 'America/New_York')).toEqual([]);
+    expect(
+      zone
+        .localDateTimeToInstants('2024-03-10T03:00:00', 'America/New_York')
+        .map((x) => x.toISOString()),
+    ).toEqual(['2024-03-10T07:00:00.000Z']);
   });
 });

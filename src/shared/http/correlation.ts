@@ -17,6 +17,22 @@ export function correlationRequestId(request: IncomingMessage | Http2ServerReque
 }
 
 function operationFor(method: string, url: string): TelemetryOperation {
+  const path = url.split('?')[0] ?? '';
+  if (method === 'GET' && /^\/v1\/public\/tenants\/[^/]+\/services$/.test(path))
+    return 'scheduling_catalog';
+  if (method === 'GET' && /^\/v1\/public\/tenants\/[^/]+\/availability$/.test(path))
+    return 'scheduling_availability';
+  if (method === 'POST' && /^\/v1\/public\/tenants\/[^/]+\/appointments$/.test(path))
+    return 'scheduling_booking';
+  if (method === 'GET' && path === '/v1/management/appointments') return 'scheduling_agenda';
+  if (method === 'POST' && /^\/v1\/management\/appointments\/[^/]+\/cancellation$/.test(path))
+    return 'scheduling_cancel';
+  if (method === 'POST' && /^\/v1\/management\/appointments\/[^/]+\/rescheduling$/.test(path))
+    return 'scheduling_reschedule';
+  if (method === 'POST' && /^\/v1\/management\/appointments\/[^/]+\/outcome$/.test(path))
+    return 'scheduling_outcome';
+  if (/^\/v1\/management\/(scheduling-settings|time-zone|services|professionals)(\/|$)/.test(path))
+    return 'scheduling_configuration';
   if (method !== 'POST') return 'http_other';
   switch (url.split('?')[0]) {
     case '/v1/tenants/register':
@@ -48,11 +64,13 @@ export function configureCorrelation(app: NestFastifyApplication, telemetry?: Te
         const outcome: TelemetryOutcome =
           status === 429
             ? 'throttled'
-            : status >= 500
-              ? 'failed'
-              : status >= 400
-                ? 'rejected'
-                : 'accepted';
+            : status === 409 && operationFor(request.method, request.url).startsWith('scheduling_')
+              ? 'conflict'
+              : status >= 500
+                ? 'failed'
+                : status >= 400
+                  ? 'rejected'
+                  : 'accepted';
         context.span.finish(outcome, status);
       }
       done();

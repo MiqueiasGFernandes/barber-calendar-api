@@ -16,7 +16,7 @@ services:
       test:
         [
           'CMD-SHELL',
-          'pg_isready -U postgres -d barber_calendar_e2e && psql -U postgres -d barber_calendar_e2e -tAc "SELECT revision=''002-appointment-scheduling-v1'' FROM app_meta.schema_build WHERE singleton" | grep -qx t',
+          'pg_isready -U postgres -d barber_calendar_e2e && psql -U postgres -d barber_calendar_e2e -tAc "SELECT revision=''002-appointment-scheduling-v2'' FROM app_meta.schema_build WHERE singleton" | grep -qx t',
         ]
       interval: 3s
       timeout: 5s

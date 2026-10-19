@@ -1,12 +1,12 @@
 # Tarefas: Agendamento de Serviços
 
-**Entrada**: `specs/002-appointment-scheduling/` — `spec.md`, `plan.md`, `research.md`, `data-model.md`, `contracts/openapi.yaml` e `quickstart.md`.
+**Entrada**: `specs/002-appointment-scheduling/` — `spec.md`, `plan.md`, `research.md`, `data-model.md`, `contracts/openapi.yaml`, `contracts/configuration-audit.md` e `quickstart.md`.
 
-**Atualização**: 2026-10-19, incorporando intervalo configurável, antecedência mínima, rejeição de mudanças conflitantes e estados finais imutáveis.
+**Atualização**: 2026-10-19, incorporando o incremento v2 de auditoria administrativa (FR-023/SC-009), sem novo endpoint, e preservando as tarefas e evidências da base v1.
 
 **Testes**: Obrigatórios pelos cenários da especificação e pela constituição (`.specify/memory/constitution.md`). Em cada incremento, escrever os testes, observar falha pertinente, implementar e refatorar. Não marcar tarefa como concluída apenas por criar um teste ainda falhando.
 
-**Organização**: TypeScript/NestJS/Fastify e PostgreSQL existentes; reaproveitar infraestrutura. Os caminhos abaixo são relativos à raiz. Novos endpoints ficam em `/v1`, preservando autenticação existente. T001–T058 estão concluídas; a fase final permanece pendente.
+**Organização**: TypeScript/NestJS/Fastify e PostgreSQL existentes; reaproveitar infraestrutura. Os caminhos abaixo são relativos à raiz. Novos endpoints ficam em `/v1`, preservando autenticação existente. T001–T064 estão concluídas; T065 permanece pendente por depender de ensaio com consumidor e participantes, conforme registrado em `quickstart.md`. T066–T089 estão concluídas e validadas em ambiente descartável; comandos e resultados v2 estão registrados em `quickstart.md`. T065 não bloqueia esse incremento técnico. IDs e marcações da base foram preservados; as novas tarefas seguem a ordem de dependências descrita abaixo.
 
 ## Formato: `[ID] [P?] [História] Descrição`
 
@@ -78,7 +78,7 @@
 
 - [X] T024 [P] [US1] Criar testes PostgreSQL em `test/integration/scheduling/booking-concurrency.spec.ts`: 100 chaves distintas disputam um intervalo (1 sucesso/99 conflitos), intervalos adjacentes, replay concorrente, rollback, múltiplos profissionais elegíveis e relógio expirando após lock; isolar throttle nessa fixture.
 
-- [X] T025 [P] [US1] Criar `test/e2e/appointments.e2e-spec.ts` cobrindo os nove cenários US1, consulta após reserva, entrada malformada, tenant inexistente e respostas privadas; usar relógio controlado sem esperas reais.
+- [X] T025 [P] [US1] Criar `test/e2e/appointments.e2e-spec.ts` cobrindo os dez cenários US1, consulta após reserva, entrada malformada, tenant inexistente e respostas privadas; usar relógio controlado sem esperas reais.
 
 ### Implementação da História 1
 
@@ -168,23 +168,89 @@
 
 - [X] T058 [US3] Criar `src/modules/scheduling/infrastructure/http/appointment-management.controller.ts` e `dto/appointment-management.schemas.ts` nesse diretório; registrar quatro rotas no módulo `src/modules/scheduling/scheduling.module.ts`, exigir administrator e chave nas três mutações, executar testes US3.
 
-## Fase Final: Refinamento e Aspectos Transversais
+## Fase 6: Refinamento e Validação da Base v1
 
 **Objetivo**: Validar a entrega integrada, segurança, operação e documentação.
 
-- [ ] T059 [P] Ampliar `test/integration/security-redaction.spec.ts` para nome, telefone, e-mail, chave idempotente, IP bruto e segredos; verificar logs/telemetria, respostas públicas e ciphertext; erros administrativos podem conter apenas IDs autorizados de conflitos.
+- [X] T059 [P] Ampliar `test/integration/security-redaction.spec.ts` para nome, telefone, e-mail, chave idempotente, IP bruto e segredos; verificar logs/telemetria, respostas públicas e ciphertext; erros administrativos podem conter apenas IDs autorizados de conflitos.
 
-- [ ] T060 [P] Adicionar métricas de latência p95, conflitos, transições, replay e limitação sem PII ou labels de alta cardinalidade em `src/shared/observability/metrics.ts` e `src/modules/scheduling/application/services/scheduling-observability.service.ts`; validar redação e correlação em `test/unit/scheduling/observability.spec.ts`, sem inventar SLA.
+- [X] T060 [P] Adicionar métricas de latência p95, conflitos, transições, replay e limitação sem PII ou labels de alta cardinalidade em `src/shared/observability/metrics.ts` e `src/modules/scheduling/application/services/scheduling-observability.service.ts`; validar redação e correlação em `test/unit/scheduling/observability.spec.ts`, sem inventar SLA.
 
-- [ ] T061 [P] Atualizar `README.md`, `.env.example` e `specs/002-appointment-scheduling/quickstart.md` com comandos efetivos, configurações, chaves de segurança, rotas, SQL de release e validação com consumidor; manter dados de exemplo fictícios.
+- [X] T061 [P] Atualizar `README.md`, `.env.example` e `specs/002-appointment-scheduling/quickstart.md` com comandos efetivos, configurações, chaves de segurança, rotas, SQL de release e validação com consumidor; manter dados de exemplo fictícios.
 
-- [ ] T062 Verificar fronteiras em `test/architecture/module-boundaries.spec.ts` e `test/architecture/module-aliases.spec.ts`; domínio independente, imports por aliases existentes, ausência de ORM/DDL no runtime e dependências de scheduling registradas em `src/modules/scheduling/scheduling.module.ts`.
+- [X] T062 Verificar fronteiras em `test/architecture/module-boundaries.spec.ts` e `test/architecture/module-aliases.spec.ts`; domínio independente, imports por aliases existentes, ausência de ORM/DDL no runtime e dependências de scheduling registradas em `src/modules/scheduling/scheduling.module.ts`.
 
-- [ ] T063 Executar aplicação/verificação/rollback/reaplicação em cópia descartável por `database/releases/002-appointment-scheduling/up.sql`, `verify.sql`, `rollback.sql`; verificar bootstrap limpo equivalente, grants e manifesto; registrar resultados em `specs/002-appointment-scheduling/quickstart.md`, sem aplicar em produção.
+- [X] T063 Executar aplicação/verificação/rollback/reaplicação em cópia descartável por `database/releases/002-appointment-scheduling/up.sql`, `verify.sql`, `rollback.sql`; verificar bootstrap limpo equivalente, grants e manifesto; registrar resultados em `specs/002-appointment-scheduling/quickstart.md`, sem aplicar em produção.
 
-- [ ] T064 Executar `yarn ci:check` via `scripts/check-ci.sh` após integrar a suíte PostgreSQL; comprovar lint, tipos, unitários, contratos, OpenAPI, schema, integração e E2E; corrigir falhas e registrar comandos/resultados em `specs/002-appointment-scheduling/quickstart.md`, sem repetir checks já aprovados sem motivo.
+- [X] T064 Executar `yarn ci:check` via `scripts/check-ci.sh` após integrar a suíte PostgreSQL; comprovar lint, tipos, unitários, contratos, OpenAPI, schema, integração e E2E; corrigir falhas e registrar comandos/resultados em `specs/002-appointment-scheduling/quickstart.md`, sem repetir checks já aprovados sem motivo.
 
 - [ ] T065 Executar ensaio SC-003/SC-004 com consumidor da API e registrar em `specs/002-appointment-scheduling/quickstart.md`: pelo menos 90% reservam em até três minutos; responsável configura serviço/jornada em até cinco minutos; informar amostra, tempos e limitações. Sem consumidor/participantes, registrar pendência e não declarar esses critérios aprovados.
+
+## Fase 7: História de Usuário 2 — Incremento de Auditoria Administrativa (P1)
+
+**Objetivo**: Completar FR-023, SC-009 e o cenário 7 de US2 com trilha administrativa atômica, consulta operacional autorizada e evolução v1 → v2. Reutilizar a base existente, sem nova história ou endpoint.
+
+**Teste independente**: Com fixtures de dois tenants, sem depender de US3 ou de participantes, executar as nove mutações administrativas; consultar a trilha como login real de suporte autorizado somente para A; provar estado anterior/novo, ator/tenant, negação para B, concessões expiradas/revogadas, atomicidade em falha e replay sem duplicação. Atualizações idênticas não geram eventos. Provar bootstrap v2 equivalente ao upgrade e preservação da agenda v1.
+
+### Testes da História 2 — auditoria
+
+Escrever primeiro e observar a falha correspondente antes de implementar. Os seis arquivos abaixo podem ser escritos em paralelo após a base; não alterar fixtures compartilhadas nesse lote. As suítes PostgreSQL continuam executadas em série no banco descartável.
+
+- [X] T066 [P] [US2] Criar `test/unit/scheduling/configuration-audit.spec.ts` para projeção tipada/diff: nove operações do contrato interno, enums de recurso, criação com “`before: null`”, remoção com “`after: null`”, conjuntos UUID sem repetição, jornadas canônicas sem IDs de linhas, ausência/nulo segundo o HTTP, comando sem mudança sem evento, redação de contatos/segredos em strings livres; comparar antes de redigir e preservar indicação de mudança quando os dois valores forem redigidos.
+
+- [X] T067 [P] [US2] Criar `test/integration/scheduling/configuration-audit-schema.spec.ts` para campos obrigatórios/enums/JSON não vazio, unicidade por operação/recurso, FKs de tenant/ator e rejeição de ator de outro tenant; conferir índices, preservação do UUID de exceção removida, imutabilidade e runtime sem SELECT/UPDATE/DELETE/TRUNCATE, inclusive após grants genéricos e em bootstrap v2.
+
+- [X] T068 [P] [US2] Criar `test/integration/scheduling/configuration-audit-access.spec.ts` com conexões reais de suporte por login individual: A autorizado/B não autorizado, consulta sem WHERE, concessão ausente/expirada/revogada, alteração de variável de sessão sem ganhar acesso, SET ROLE sem trocar `session_user`, impossibilidade de assumir owner/runtime, leitor sem INSERT/UPDATE/DELETE/TRUNCATE e sem alterar ACL; testar tabela de concessões visível somente ao próprio login e remover logins/concessões de teste no cleanup.
+
+- [X] T069 [P] [US2] Criar `test/integration/scheduling/configuration-audit-atomicity.spec.ts`: nova alteração grava configuração/evento/idempotência juntos; falha no append ou no save idempotente reverte os três; conflito/422/401/403 não deixa evento de mudança concluída; replay serial/concorrente não duplica; expiração da chave trata novo comando sem apagar eventos; concorrência entre configuração e reserva continua usando o lock do tenant e antes/depois refletem a ordem real.
+
+- [X] T070 [P] [US2] Criar `test/contract/scheduling-configuration-audit.contract.spec.ts` para `contracts/configuration-audit.md`: validar formato do evento/diff e correspondência das nove operações; preservar as 22 operações OpenAPI existentes, schemas/status de sucesso e tratamento sanitizado de erro interno; detectar rota de auditoria indevidamente adicionada, sem gerar contrato HTTP novo.
+
+- [X] T071 [P] [US2] Criar `test/e2e/scheduling-configuration-audit.e2e-spec.ts` cobrindo as nove mutações via HTTP e leitura interna autorizada; um evento por mudança efetiva, ator/tenant corretos, exceção removida preservada no histórico, replay/no-op sem duplicação, ausência de endpoint e contatos/segredos fictícios em texto livre redigidos na trilha e ausentes de erros/logs/OTLP; usar banco isolado e relógio controlado.
+
+### Implementação da História 2 — schema e acesso operacional
+
+- [X] T072 [US2] Adicionar `scheduling.configuration_events` em `database/schema/020_tables.sql` com restrições de `data-model.md`: id “UUID PK gerado pela aplicação”; tenant_id “UUID obrigatório, FK para `tenancy.tenants`”; actor_membership_id “Obrigatório; FK composta `(tenant_id, actor_membership_id)` para membership do mesmo tenant; preservar autoria histórica mesmo após desativação”; operation_id “UUID gerado uma vez dentro do callback de nova mutação; não é chave idempotente bruta”; operation “Uma das nove mutações administrativas definidas no contrato interno”; resource_type “`service`, `professional`, `weekly_periods`, `availability_exception`, `time_zone` ou `tenant_settings`”; resource_id “UUID do agregado: serviço/profissional/exceção ou tenant para fuso/settings; não criar FK polimórfica que impeça preservar remoção de exceção”; occurred_at “Instante UTC recebido do relógio transacional após o lock”; correlation_id “Correlação técnica validada/gerada no servidor; sem dados de contato”; changes “JSONB objeto não vazio: cada campo alterado tem `before`, `after` e indicador de redação quando aplicável; valores normalizados e tipados”. Todas as colunas do evento são obrigatórias; nulos de criação/remoção ficam dentro do diff.
+
+- [X] T073 [US2] Adicionar `scheduling.configuration_audit_access` em `database/schema/020_tables.sql`: campos obrigatórios “`principal_name` (nome do login PostgreSQL), `tenant_id` (FK), `granted_at`, `expires_at`, `granted_by` (identidade operacional) e `reason_code` controlado, sem justificativa livre ou segredo”; “PK `(principal_name, tenant_id)`; expiração posterior à concessão”. Em `database/schema/030_constraints.sql`, implementar constraints/enums básicos do evento e concessão, FKs de tenant/ator sem cascata e proteção append-only para UPDATE/DELETE. Em `database/schema/040_indexes.sql`, implementar “Unicidade `(tenant_id, operation_id, resource_type, resource_id)`”, índice “`(tenant_id, occurred_at, id)`” e índice “`(tenant_id, resource_type, resource_id, occurred_at, id)`”. Preservar tabelas/eventos v1.
+
+- [X] T074 [US2] Criar políticas em `database/schema/050_configuration_audit_policies.sql` e incluí-las em `database/init/00-bootstrap.sql`; ajustar `database/schema/090_grants.sql` para `barber_audit_reader` NOLOGIN e revogações específicas após GRANTs genéricos. Runtime só INSERT na trilha, nenhum acesso à ACL; suporte só SELECT; RLS na ACL por “`principal_name = session_user`” e na trilha por concessão vigente do login/tenant no instante da instrução. Negar acesso público, não usar SECURITY DEFINER nem variável de sessão como autorização; não conceder membership owner/runtime ou SUPERUSER/BYPASSRLS/CREATEROLE aos leitores. Credenciais/concessões individuais pertencem ao provisionamento operacional, não ao cadastro de tenants. Fazer T067/T068 passar quanto ao schema/acesso.
+
+- [X] T075 [US2] Criar `database/releases/002-appointment-scheduling-audit/up.sql`, `verify.sql` e `rollback.sql`: pré-condição v1, destino v2, DDL transacional de tabelas/constraints/índices/RLS/grants equivalente ao bootstrap, sem editar o release v1; verificar também owner, privilégios efetivos e políticas. Atualizar `database/schema/090_schema_manifest.sql`, `database/schema/schema.sha256`, `database/verify/assertions.sql`, `src/shared/http/health.controller.ts`, `compose.yaml` e `compose.e2e.yaml` para `002-appointment-scheduling-v2`. Rollback retorna v1 preservando agenda/eventos v1, remove trilha/ACL novas e documenta perda dos eventos administrativos; sem backfill fictício ou concessões automáticas. Ajustar expectativas de revisão em `test/integration/database-bootstrap.spec.ts` e `test/integration/scheduling/configuration-audit-schema.spec.ts` na mesma mudança; nenhum SQL de produção é aplicado nesta tarefa.
+
+### Implementação da História 2 — aplicação e integração
+
+- [X] T076 [US2] Definir evento, diff e `ConfigurationAuditWriter.append` em `src/modules/scheduling/application/ports/configuration-audit-writer.ts`, com as nove operações e seis tipos de recurso literais de T072/contrato interno, campos obrigatórios e `TransactionContext` recebido do chamador; sem NestJS/pg na porta, sem nova transação/commit/conexão e sem chave idempotente bruta ou hash no evento.
+
+- [X] T077 [US2] Implementar `src/modules/scheduling/application/services/configuration-audit.service.ts` com campos permitidos por operação conforme `specs/002-appointment-scheduling/contracts/configuration-audit.md`; mapear aliases HTTP/colunas existentes, normalizar conjuntos e jornadas, calcular diff antes da redação, redigir strings livres e marcar valores sem cópia original; impedir serialização de corpo/resposta HTTP completos, contatos de convidados, tokens, IP e chaves. Exigir objeto changes não vazio, omitir evento em no-op, criar operation_id somente na nova mutação e não exportar valores à telemetria. Fazer T066 passar.
+
+- [X] T078 [US2] Implementar INSERT sem RETURNING em `src/modules/scheduling/infrastructure/persistence/configuration-event.repository.ts` usando somente o `TransactionContext` fornecido, IDs já gerados pela aplicação e valores tipados de T076; não abrir conexão própria nem capturar falha como sucesso. Sem SELECT da trilha pelo runtime; erros propagam para rollback e são sanitizados na fronteira HTTP existente.
+
+- [X] T079 [US2] Integrar auditoria de `createService`/`updateService` e `createProfessional`/`updateProfessional` em `src/modules/scheduling/application/use-cases/manage-configuration.use-cases.ts`: ler antes/depois e associações sob lock, incluir elegibilidade no agregado serviço, ativação/desativação e campos efetivamente salvos; append no callback de nova mutação após validação, com ator/tenant do servidor e relógio recebido de `IdempotentMutationService.execute`. Replay deve retornar antes da leitura/diff/append; falha do evento reverte tudo. Não usar o writer independente de eventos de autenticação.
+
+- [X] T080 [US2] Integrar `replaceWeeklyWorkPeriods`, `createAvailabilityException` e `deleteAvailabilityException` em `src/modules/scheduling/application/use-cases/manage-configuration.use-cases.ts`, sequencialmente após T079 por arquivo compartilhado: capturar jornadas antigas antes do DELETE, comparar arrays sem IDs regenerados, preservar snapshot/UUID de exceção removida; criação usa anterior nulo, remoção usa novo nulo; excluir recurso já inexistente ou reenviar jornada equivalente não gera evento. Usar mesma conexão/lock/relógio e propagar falhas.
+
+- [X] T081 [US2] Integrar `updateTenantTimeZone` e `updateSchedulingSettings` em `src/modules/scheduling/application/use-cases/manage-configuration.use-cases.ts`, após T080: capturar valores persistidos antes/depois, recurso UUID do tenant, registrar apenas mudança efetiva na mesma transação, preservar snapshots e rejeição de conflitos existente; relógio/correlação do servidor. Não reauditar provisionamento antigo nem criar histórico retroativo.
+
+- [X] T082 [US2] Fazer T069 passar ajustando `src/modules/scheduling/application/services/idempotent-mutation.service.ts` apenas se necessário para manter contexto/relógio compartilhados e replay antes do callback; completar injeção controlada de falhas e casos de concorrência em `test/integration/scheduling/configuration-audit-atomicity.spec.ts`. Comprovar rollback quando append falha e quando o save idempotente falha após append; limpeza de registros expirados não remove auditoria e novo comando expirado só gera evento se mudar estado.
+
+- [X] T083 [US2] Criar `database/operations/query-configuration-audit.sql` como consulta operacional parametrizada, sem função SECURITY DEFINER: tenant UUID obrigatório; “`occurred_from` inclusivo, `occurred_before` exclusivo”, início menor que fim, resource_type/resource_id opcionais, “limite entre 1 e 100 (padrão 100)” e cursor “`(occurred_at, id)`” com ordem ascendente e avanço estrito. Validar entradas sem concatenar SQL inseguro, exigir conexão do login leitor e depender de RLS além do WHERE; não adicionar CLI com credenciais do runtime ou endpoint. Ampliar `test/integration/scheduling/configuration-audit-access.spec.ts` para filtros/paginação, limites inválidos e uso desse arquivo; concessão/revogação fica com owner operacional e remoção de concessões precede reutilização do nome de login.
+
+- [X] T084 [US2] Registrar porta/serviço/repository em `src/modules/scheduling/scheduling.module.ts` e completar a passagem das dependências em `src/modules/scheduling/application/use-cases/manage-configuration.use-cases.ts`; manter rotas e contrato HTTP existentes. Fazer T070/T071 passar e confirmar ausência de leitura administrativa da trilha pelo runtime; corrigir fronteiras da nova porta/adapter em `test/architecture/module-boundaries.spec.ts` sem enfraquecer regras existentes.
+
+- [X] T085 [US2] Integrar a execução dos novos testes em `scripts/test-e2e.sh` e suas fixtures em `test/e2e/scheduling-support.ts` somente se o descobrimento/cleanup atuais não bastarem; manter PostgreSQL real e execução serial. Comprovar o cenário 7 de US2 e SC-009 em `test/e2e/scheduling-configuration-audit.e2e-spec.ts`, com todos os testes T066–T071 aprovados e nenhum evento duplicado ou consulta cross-tenant; cleanup remove conexões/logins/concessões descartáveis sem apagar dados de produção.
+
+**Ponto de verificação**: US2 inclui auditoria funcional e testada por fixtures; release e verificações finais abaixo ainda são necessários. US1/US3 devem continuar passando sem novos recursos públicos.
+
+## Fase Final: Validação e Operação do Incremento v2
+
+- [X] T086 Atualizar `README.md` e `specs/002-appointment-scheduling/quickstart.md` com comandos efetivos do release/consulta interna, autorização temporária por login/tenant, expiração/revogação e encerramento de sessões para revogação imediata quando necessário; explicar que novas instruções observam a revogação, sem prometer interromper consulta já em execução. Documentar janela sem escritas na troca de revisão, perda explícita da auditoria no rollback e preservação protegida de eventos quando necessária; manter PASS v1 e pendência T065, sem presumir resultados v2.
+
+- [X] T087 Estender `scripts/check-scheduling-release.sh` e `database/verify/scheduling-release-equivalence.sql` para incluir tabelas, constraints, índices, owners/grants efetivos, roles e políticas RLS do incremento. Executar em PostgreSQL descartável autenticação → v1 → v2, upgrade com agenda/eventos v1 populados e equivalência ao bootstrap v2; testar rollback v2 → v1, reaplicação e prova v1 → autenticação separadamente, com preservação de dados pertinente a cada etapa. Registrar comandos/resultados reais em `specs/002-appointment-scheduling/quickstart.md`; sem usar banco de produção ou editar SQL histórico v1.
+
+- [X] T088 Ampliar `test/integration/security-redaction.spec.ts` e `test/architecture/module-boundaries.spec.ts` para a nova trilha/porta, provar que valores sensíveis não aparecem em erros/logs/OTLP e que leitura interna não alcança contatos/idempotência. Revisar privilégios reais após bootstrap e upgrade por `test/integration/scheduling/configuration-audit-access.spec.ts`; manter domínios independentes, APIs compatíveis e nenhum endpoint de auditoria.
+
+- [X] T089 Executar `yarn ci:check` via `scripts/check-ci.sh` após T086–T088 e integração do incremento; comprovar unitários, contratos, OpenAPI, schema/grants/RLS, integração PostgreSQL, E2E e revisão v2, corrigindo falhas. Atualizar `specs/002-appointment-scheduling/quickstart.md` com comandos/resultados/limitações e `specs/002-appointment-scheduling/plan.md` com o estado efetivamente validado, sem alterar evidência histórica nem declarar T065/SC-003/SC-004 aprovados sem ensaio humano.
 
 ## Dependências e Ordem
 
@@ -194,13 +260,18 @@ Preparação (T001–T004)
     → US1 (T022–T034, P1)
       → US2 (T035–T048, P1)
         → US3 (T049–T058, P2)
-          → Refinamento (T059–T065)
+          → Validação da base v1 (T059–T064)
+            → US2 auditoria v2 (T066–T085)
+              → Validação v2 (T086–T089)
+
+Ensaio humano T065: ramo independente; não bloqueia T066–T089,
+mas SC-003/SC-004 continuam pendentes até sua execução.
 ```
 
 - Preparação é sequencial; preservar configurações/aliases anteriores.
 - Na Fundação, T005, T006 e T007 formam um lote independente. Depois, SQL → constraints → índices → release → provisionamento → fixtures. T016 e T017 podem executar juntos após as portas/fixtures; protocolo → idempotência → eventos → integração comum são sequenciais.
 - US1 depende apenas da Fundação e usa fixtures para catálogo/configurações. US2 usa US1 para comprovar o efeito na disponibilidade, mas seu domínio pode ser testado com fixtures. US3 reutiliza consulta pública e configuração US2 para o teste integrado; seus testes de transição usam reservas fixture.
-- Dentro de cada história: testes primeiro, modelos antes de casos de uso, casos de uso antes de controllers, registro do módulo por último. Tarefas não marcadas `[P]` seguem a ordem numérica.
+- Dentro de cada história: testes primeiro, modelos antes de casos de uso, casos de uso antes de controllers, registro do módulo por último. Tarefas não marcadas `[P]` seguem a ordem numérica dentro do incremento, exceto o ramo humano T065 explicitamente independente. No ciclo TDD, testes pendentes por falta da implementação não bloqueiam escrever a implementação que os fará passar; só marcar testes concluídos depois de passarem.
 - Nos testes TDD, primeiro observar a falha; a conclusão do lote exige que a implementação correspondente os faça passar. Não substituir PostgreSQL por mock nas provas de isolamento/concorrência.
 
 ### Exemplos de execução paralela por história
@@ -208,10 +279,18 @@ Preparação (T001–T004)
 | História | Lote de testes independente após Fundação | Lote de implementação após pré-requisitos |
 |---|---|---|
 | US1 | T022, T023, T024, T025 | T029 e T030 após T028; arquivos distintos |
-| US2 | T035, T036, T037, T038 | T041–T046 após T040; arquivos separados, mesma porta transacional pronta |
+| US2 base | T035, T036, T037, T038 | T041–T046 sequenciais após T040; compartilham `manage-configuration.use-cases.ts` |
+| US2 auditoria | T066–T071: escrita dos testes em seis arquivos independentes | T072–T085 sequenciais; schema, casos de uso e módulo compartilham arquivos |
 | US3 | T049, T050, T051, T052 | Implementação sequencial: cancelamento/reagendamento/resultado compartilham repository |
 
 O refinamento permite T059, T060 e T061 simultaneamente; demais verificações dependem desses resultados. Nunca editar `scheduling.module.ts`, schema SQL ou `appointment-lifecycle.repository.ts` em paralelo entre tarefas.
+
+### Dependências específicas do incremento v2
+
+- Base T001–T064 → escrita dos testes T066–T071 (lote paralelo; observar falhas pertinentes) → schema/ACL T072–T074 → release/revisão T075 → porta/projeção T076–T077 → writer T078 → integração sequencial das nove mutações T079–T081 → atomicidade T082 → consulta T083 → providers/contratos/E2E T084–T085 → documentação T086 → ensaio de release T087 → revisão transversal T088 → CI/evidências T089.
+- T065 pode ocorrer independentemente quando houver consumidor/participantes; a entrega completa mantém essa pendência visível.
+- Dentro do incremento v2, somente a escrita de T066–T071 tem `[P]`. Não executar suítes PostgreSQL ou editar `manage-configuration.use-cases.ts`, schema, módulo ou fixtures compartilhadas em paralelo.
+- O incremento v2 é a menor entrega técnica pendente: não pode ser considerado concluído com apenas o INSERT de evento, sem consulta interna autorizada, testes e release.
 
 ## Rastreabilidade
 
@@ -227,6 +306,8 @@ O refinamento permite T059, T060 e T061 simultaneamente; demais verificações d
 | FR-015, FR-016 | T027, T030, T033, T046 |
 | FR-017, FR-018 | T011, T021, T031, T059 |
 | FR-020, FR-021, FR-022 | T009, T028, T031, T045 |
+| FR-023 | T066–T085, T086–T089 |
+| SC-009 | T067–T071, T082–T085, T087–T089 |
 | SC-001, SC-002 | T022, T024 |
 | SC-003, SC-004 | T065 |
 | SC-005 | T016, T037, T051, T059 |
@@ -241,3 +322,21 @@ Concluir Preparação e Fundação, depois US1. Demonstrar consulta e reserva se
 ### Entrega incremental
 
 Concluir e verificar uma história por vez; a próxima não deve quebrar os testes anteriores. Revalidar contratos e schema apenas quando alterados. Não incluir pagamento, notificações externas, cadeiras físicas independentes, conta de convidado ou frontend neste incremento. A entrega só é declarada validada quando os critérios aplicáveis, inclusive ensaio de usabilidade quando disponível, tiverem evidências reais.
+
+
+### Próximo incremento executável
+
+O MVP original é US1 com catálogo/jornadas fixture; a operação autônoma inclui US2 e a gestão diária inclui US3. A base mantém suas marcações de conclusão. T066–T089 foram executadas como incremento da US2, sem recriar projeto, reimplementar histórias concluídas ou publicar novo endpoint. A auditoria foi demonstrada com fixtures, PostgreSQL real e HTTP; CI e ensaio SQL v2 passaram em ambientes descartáveis, sem deploy ou alteração de banco de produção. T065 segue como validação humana separada.
+
+
+## Phase 8: Convergence
+
+Avaliação do estado atual contra especificação, plano e tarefas em 2026-10-19. Resultado: três achados HIGH (F1–F3), sem violação constitucional CRITICAL confirmada. Os testes existentes aprovados não cobrem integralmente os casos abaixo. Esta seção somente acrescenta trabalho; não reabre nem substitui as marcações anteriores. T065 permanece independente, aguardando consumidor/participantes.
+
+- [X] T090 [US2] Corrigir a proteção de campos livres em `src/modules/scheduling/application/services/configuration-audit.service.ts` por FR-023, SC-009 e T066/T077/T088 (partial; F1; HIGH): a reprodução com uma credencial sintética `ghp_` seguida de 36 letras demonstrou persistência literal em `changes.description` sem indicador de redação. Adotar uma política explícita e conservadora de projeção/redação que não dependa apenas das palavras password/secret/token e de poucos prefixos; preservar identificação do campo alterado e comparação antes da redação sem guardar o original sensível. Acrescentar regressões em `test/unit/scheduling/configuration-audit.spec.ts` e `test/integration/security-redaction.spec.ts` para credenciais sintéticas sem rótulo, inclusive formatos de token e chave privada, nos valores anteriores/novos de nome, descrição e motivo; provar ausência dos originais na trilha, erros e telemetria. Ajustar a evidência de validação em `specs/002-appointment-scheduling/quickstart.md` após os checks pertinentes, sem usar segredos reais.
+
+- [X] T091 [US2] Corrigir `src/modules/scheduling/infrastructure/persistence/configuration-conflict.repository.ts` por FR-014, SC-007 e T037/T040 (contradicts; F2; HIGH): as seis consultas usam `starts_at > clock_timestamp()` e excluem compromissos ainda confirmados cujo início já ocorreu. Remover essa exclusão não prevista na especificação e verificar todos os confirmados afetados por bloqueio, jornada, fuso, desativação e remoção de elegibilidade, mantendo snapshots e a transação/lock do tenant. Adicionar testes PostgreSQL em `test/integration/scheduling/configuration-concurrency.spec.ts` para compromissos iniciados e ainda em andamento, limites exatos e confirmados anteriores ainda não finalizados: conflito retorna 409 com IDs autorizados, preserva configuração/agendamento e não grava evento de mudança concluída; comprovar nova tentativa após resolução conforme a especificação. Atualizar os resultados pertinentes em `specs/002-appointment-scheduling/quickstart.md`.
+
+- [X] T092 [US1] Corrigir `src/modules/scheduling/domain/availability.ts` e, se necessário, `src/modules/scheduling/infrastructure/time/iana-time-zone.adapter.ts` por FR-005, FR-015, SC-001 e T022/T027/T028 (partial; F3; HIGH): `periodEndCandidates` vazio descarta a jornada inteira quando seu fechamento é um horário civil inexistente. A reprodução em `America/New_York`, data 2024-03-10, jornada 01:00–02:30 e serviço de 30 minutos retornou zero opções apesar de 01:00–01:30 ser válido. Preservar candidatos cujos intervalos completos sejam válidos e caibam na jornada antes da lacuna, sem oferecer instantes inexistentes ou atravessar o fechamento; manter grade ancorada, minutos decorridos e offsets explícitos. Acrescentar regressões com relógio controlado em `test/unit/scheduling/availability.spec.ts`, `test/unit/scheduling/time-zone.spec.ts` e `test/integration/scheduling/booking-concurrency.spec.ts`, provando consistência entre consulta e confirmação nas bordas de transição civil. Executar os checks afetados e registrar os resultados em `specs/002-appointment-scheduling/quickstart.md`.
+
+**Ordem de execução**: T090 → T091 → T092, com teste falhando antes da correção e registro de resultados após aprovação. Nenhuma destas tarefas depende do ensaio humano T065; a entrega completa mantém SC-003/SC-004 pendentes até esse ensaio.

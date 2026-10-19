@@ -1,28 +1,15 @@
-import type { TelemetryOperation, TelemetryOutcome } from './metrics.js';
+import {
+  telemetryOperations,
+  telemetryOutcomes,
+  type TelemetryOperation,
+  type TelemetryOutcome,
+} from './metrics.js';
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const traceIdPattern = /^[0-9a-f]{32}$/i;
 const spanIdPattern = /^[0-9a-f]{16}$/i;
-const operations = new Set<TelemetryOperation>([
-  'registration',
-  'otp_request',
-  'otp_verification',
-  'http_other',
-  'outbox_poll',
-  'outbox_delivery',
-  'throttle_retention',
-]);
-const outcomes = new Set<TelemetryOutcome>([
-  'accepted',
-  'rejected',
-  'throttled',
-  'succeeded',
-  'failed',
-  'delivered',
-  'retry',
-  'expired',
-  'terminal_failure',
-]);
+const operations = new Set<TelemetryOperation>(telemetryOperations);
+const outcomes = new Set<TelemetryOutcome>(telemetryOutcomes);
 const events = new Set([
   'http_request_completed',
   'outbox_delivery_completed',
@@ -52,7 +39,7 @@ export function redact(value: unknown): unknown {
   if (value && typeof value === 'object') {
     const entries = Object.entries(value).map(([key, item]) => [
       key,
-      /authorization|cookie|token|secret|password|otp|code|email|ip|envelope|payload|body|header|error|url|address/i.test(
+      /authorization|cookie|token|secret|password|otp|code|email|ip|envelope|payload|body|header|error|url|address|name|phone|idempotency|encryption|ciphertext/i.test(
         key,
       )
         ? '[REDACTED]'

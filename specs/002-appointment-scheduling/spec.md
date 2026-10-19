@@ -21,6 +21,7 @@
 - Q: O responsável pode reabrir um agendamento cancelado, atendido ou marcado como “não compareceu”? → A: Não. Esses estados são finais; para reservar novamente, é necessário criar outro agendamento, preservando o histórico anterior.
 - Q: O responsável deve poder marcar “não compareceu” assim que o horário começar, ou só depois que o horário terminar? → A: “Não compareceu” pode ser marcado a partir do início agendado; “atendido” somente após o término.
 - Q: Quando o cliente aceita qualquer profissional, como o sistema deve escolher quem receberá o agendamento? → A: Escolher o profissional elegível com menos minutos de atendimentos confirmados naquele dia local; em caso de empate, desempatar pelo identificador do profissional. A escolha explícita do cliente sempre prevalece.
+- Q: O responsável precisa consultar pela API o histórico de alterações de serviços, profissionais e configurações da agenda nesta versão? → A: Registrar o histórico para consulta interna por operação/suporte autorizado, sem novo endpoint nesta versão.
 
 
 ## Cenários de Usuário e Testes *(obrigatório)*
@@ -62,6 +63,7 @@ O responsável da barbearia cadastra serviços, duração e profissionais aptos 
 4. **Dado que** um serviço foi desativado ou removido da oferta da barbearia, **Quando** o cliente inicia uma nova busca, **Então** esse serviço não pode ser selecionado nem agendado.
 5. **Dado que** um período de expediente começa às 09:00 e a barbearia configura o intervalo em 20 minutos, **Quando** o cliente consulta a disponibilidade, **Então** os inícios candidatos são 09:00, 09:20, 09:40 e assim por diante, oferecendo apenas os que comportam o serviço completo sem conflitos.
 6. **Dado que** a barbearia não personalizou o intervalo, **Quando** o cliente consulta a disponibilidade, **Então** os inícios candidatos são espaçados em 15 minutos a partir do início de cada período de expediente.
+7. **Dado que** um responsável autorizado altera serviços, profissionais ou configurações da agenda, **Quando** a alteração é concluída, **Então** o histórico registra autor, instante, barbearia, recurso afetado e mudança realizada para consulta interna autorizada; uma alteração rejeitada não registra mudança concluída e a repetição da mesma operação não duplica o registro.
 
 ### História de Usuário 3 - Acompanhar e Alterar Agendamentos (Prioridade: P2)
 
@@ -120,6 +122,7 @@ O responsável da barbearia consulta a agenda por profissional e período, ident
 - **FR-020**: O cliente DEVE poder consultar disponibilidade desde a data atual até 30 dias corridos à frente no fuso horário da barbearia; datas posteriores não DEVEM aceitar reservas. A consulta e a confirmação DEVEM respeitar a antecedência mínima configurada pela barbearia e excluir horários passados.
 - **FR-021**: O responsável DEVE poder configurar o intervalo entre horários de início oferecidos na barbearia, em minutos inteiros positivos, com padrão de 15 minutos. Essa configuração DEVE ser aplicada a todos os profissionais e serviços da barbearia, sem alterar a duração dos serviços nem os agendamentos existentes.
 - **FR-022**: O responsável DEVE poder configurar a antecedência mínima para reservas na barbearia em minutos inteiros não negativos, com padrão de 30 minutos. A consulta e a confirmação DEVEM exigir início igual ou posterior ao instante da operação acrescido da antecedência configurada; com zero, somente inícios futuros DEVEM ser aceitos. Mudanças nessa configuração não DEVEM alterar agendamentos já confirmados.
+- **FR-023**: Alterações concluídas de serviços, profissionais e configurações da agenda — incluindo ativação/desativação, elegibilidade, jornadas, exceções, fuso, intervalo e antecedência — DEVEM registrar autor, instante, barbearia, recurso afetado e valores anteriores e novos dos campos alterados em trilha de auditoria, sem dados de contato de clientes ou segredos. O registro DEVE ser preservado junto com a alteração, sem duplicação em repetições da mesma operação e sem registrar alterações rejeitadas como concluídas. A consulta desse histórico DEVE ser restrita à operação/suporte autorizado, respeitando o escopo da barbearia; nenhum novo endpoint de consulta será oferecido nesta versão.
 
 ### Entidades Principais
 
@@ -143,6 +146,7 @@ O responsável da barbearia consulta a agenda por profissional e período, ident
 - **SC-006**: Após cancelamento confirmado, o horário elegível volta a aparecer na disponibilidade em até cinco segundos; após reagendamento, apenas o novo intervalo permanece reservado.
 - **SC-007**: Em 100% dos testes de mudança de jornada, serviço ou capacidade ou criação de bloqueio com conflito, a operação é rejeitada, a configuração anterior e os compromissos confirmados são preservados e os conflitos são informados. Após cancelar ou reagendar os compromissos afetados, uma nova tentativa sem conflitos permite aplicar a mudança.
 - **SC-008**: Em 100% dos testes de ciclo do agendamento, cancelamentos, atendimentos realizados e não comparecimentos recebem o estado correto e continuam consultáveis no histórico; tentativas de reabrir, reagendar ou alterar o estado de agendamentos finais são rejeitadas sem modificar o registro anterior; resultados informados antes do instante permitido são rejeitados.
+- **SC-009**: Em todos os testes de auditoria administrativa, cada alteração concluída prevista em FR-023 possui registro com autor, instante, barbearia, recurso e valores anteriores e novos; falhas não deixam alteração sem auditoria nem registro de mudança concluída inexistente, e repetições não duplicam registros. A consulta interna respeita autorização e escopo da barbearia e não há novo endpoint de consulta desse histórico.
 
 ## Premissas
 

@@ -16,3 +16,9 @@ GRANT SELECT,INSERT,UPDATE,DELETE ON ALL TABLES IN SCHEMA identity,tenancy,audit
 GRANT SELECT,INSERT,UPDATE,DELETE ON ALL TABLES IN SCHEMA scheduling TO barber_runtime;
 REVOKE UPDATE,DELETE ON scheduling.appointment_events FROM barber_runtime;
 REVOKE CREATE ON SCHEMA public, app_meta, identity, tenancy, audit, scheduling FROM barber_runtime;
+
+-- Revogações específicas devem seguir os grants genéricos.
+REVOKE ALL ON scheduling.configuration_events,scheduling.configuration_audit_access FROM PUBLIC,barber_runtime;
+GRANT INSERT ON scheduling.configuration_events TO barber_runtime;
+GRANT USAGE ON SCHEMA scheduling TO barber_audit_reader;
+GRANT SELECT ON scheduling.configuration_events,scheduling.configuration_audit_access TO barber_audit_reader;

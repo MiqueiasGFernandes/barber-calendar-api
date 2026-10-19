@@ -110,3 +110,11 @@ ALTER TABLE scheduling.appointments ADD CONSTRAINT appointments_confirmed_no_ove
 CREATE FUNCTION scheduling.reject_event_mutation() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'appointment events are append-only'; END $$;
 CREATE TRIGGER appointment_events_append_only BEFORE UPDATE OR DELETE ON scheduling.appointment_events FOR EACH ROW EXECUTE FUNCTION scheduling.reject_event_mutation();
 
+
+-- Auditoria administrativa v2.
+ALTER TABLE scheduling.configuration_events
+  ADD CONSTRAINT configuration_events_operation CHECK(operation IN ('createService','updateService','createProfessional','updateProfessional','replaceWeeklyWorkPeriods','createAvailabilityException','deleteAvailabilityException','updateTenantTimeZone','updateSchedulingSettings')),
+  ADD CONSTRAINT configuration_events_resource CHECK(resource_type IN ('service','professional','weekly_periods','availability_exception','time_zone','tenant_settings')),
+  ADD CONSTRAINT configuration_events_changes CHECK(jsonb_typeof(changes)='object' AND changes<>'{}'::jsonb),
+  ADD CONSTRAINT configuration_events_correlation CHECK(length(correlation_id) BETWEEN 1 AND 128);
+CREATE TRIGGER configuration_events_append_only BEFORE UPDATE OR DELETE ON scheduling.configuration_events FOR EACH ROW EXECUTE FUNCTION scheduling.reject_event_mutation();

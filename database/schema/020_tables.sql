@@ -130,3 +130,20 @@ CREATE TABLE scheduling.public_throttle_windows (
   PRIMARY KEY (tenant_id,ip_hash,operation_group,window_start)
 );
 
+
+-- Auditoria administrativa v2.
+CREATE TABLE scheduling.configuration_events (
+  id uuid PRIMARY KEY, tenant_id uuid NOT NULL REFERENCES tenancy.tenants(id),
+  actor_membership_id uuid NOT NULL, operation_id uuid NOT NULL,
+  operation text NOT NULL, resource_type text NOT NULL, resource_id uuid NOT NULL,
+  occurred_at timestamptz NOT NULL, correlation_id text NOT NULL, changes jsonb NOT NULL,
+  FOREIGN KEY (tenant_id,actor_membership_id) REFERENCES tenancy.tenant_memberships(tenant_id,id)
+);
+CREATE TABLE scheduling.configuration_audit_access (
+  principal_name text NOT NULL, tenant_id uuid NOT NULL REFERENCES tenancy.tenants(id),
+  granted_at timestamptz NOT NULL, expires_at timestamptz NOT NULL,
+  granted_by text NOT NULL, reason_code text NOT NULL,
+  PRIMARY KEY(principal_name,tenant_id),
+  CHECK(expires_at>granted_at), CHECK(length(principal_name)>0), CHECK(length(granted_by)>0),
+  CHECK(reason_code IN ('support','incident','verification'))
+);

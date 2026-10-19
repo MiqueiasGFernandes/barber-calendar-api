@@ -14,3 +14,8 @@ CREATE INDEX idempotency_expiry_idx ON scheduling.idempotency_records(expires_at
 CREATE UNIQUE INDEX idempotency_scope_unique ON scheduling.idempotency_records(tenant_id,actor_scope,operation,resource_scope,key_hash);
 CREATE INDEX public_throttle_expiry_idx ON scheduling.public_throttle_windows(expires_at);
 
+
+-- Auditoria administrativa v2.
+CREATE UNIQUE INDEX configuration_events_operation_resource ON scheduling.configuration_events(tenant_id,operation_id,resource_type,resource_id);
+CREATE INDEX configuration_events_tenant_time ON scheduling.configuration_events(tenant_id,occurred_at,id);
+CREATE INDEX configuration_events_resource_time ON scheduling.configuration_events(tenant_id,resource_type,resource_id,occurred_at,id);

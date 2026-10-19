@@ -26,4 +26,10 @@ describe('module boundaries', () => {
         /synchronize\s*:|migration:run|prisma\./i,
       );
   });
+  it('keeps SQL DDL out of application startup and runtime repositories', () => {
+    for (const path of files('src'))
+      expect(readFileSync(path, 'utf8'), path).not.toMatch(
+        /\b(?:CREATE|ALTER|DROP)\s+(?:TABLE|SCHEMA|INDEX|EXTENSION|DATABASE)\b/i,
+      );
+  });
 });

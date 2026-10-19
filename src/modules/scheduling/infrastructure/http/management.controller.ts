@@ -12,7 +12,7 @@ type Request=FastifyRequest & {auth?:AuthorizedSession};
 @Controller('v1/management') @UseGuards(TenantSessionGuard,AdministratorGuard) @UseFilters(SchedulingExceptionFilter)
 export class ManagementController {
  constructor(@Inject(MANAGE_CONFIGURATION) private readonly useCases:ManageConfigurationUseCases){}
- private auth(req:Request){if(!req.auth)throw new Error('administrator guard did not populate auth');return {tenantId:req.auth.tenantId,membershipId:req.auth.membershipId};}
+ private auth(req:Request){if(!req.auth)throw new Error('administrator guard did not populate auth');return {tenantId:req.auth.tenantId,membershipId:req.auth.membershipId,correlationId:req.id};}
  private key(v:unknown){return requireIdempotencyKey(v);}
  @Get('scheduling-settings') settings(@Req() r:Request){return this.useCases.getSettings(this.auth(r));}
  @Put('scheduling-settings') @HttpCode(200) putSettings(@Req() r:Request,@Headers('idempotency-key') k:unknown,@Body() b:unknown){return this.useCases.updateSettings(this.auth(r),this.key(k),parseSchedulingInput(s.settingsSchema,b));}

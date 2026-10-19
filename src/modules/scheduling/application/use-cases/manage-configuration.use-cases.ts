@@ -1,3 +1,5 @@
+import type { ConfigurationAuditService } from '../services/configuration-audit.service.js';
+import type { ConfigurationOperation } from '../ports/configuration-audit-writer.js';
 import { randomUUID } from 'node:crypto';
 import { ApplicationError } from '../../../../shared/application/application-error.js';
 import type { IdempotentMutationService } from '../services/idempotent-mutation.service.js';
@@ -9,55 +11,484 @@ import { AvailabilityException } from '../../domain/availability-exception.js';
 import type { TimeZoneConverter } from '../ports/time-zone.js';
 import type { ConfigurationConflictService } from '../services/configuration-conflict.service.js';
 
-type Auth = { tenantId: string; membershipId: string };
+type Auth = { tenantId: string; membershipId: string; correlationId?: string };
 type QueryResult<R> = { rows: R[]; rowCount: number | null };
-type Query = { query<R extends object = Row>(sql: string, values?: readonly unknown[]): Promise<QueryResult<R>> };
+type Query = {
+  query<R extends object = Row>(sql: string, values?: readonly unknown[]): Promise<QueryResult<R>>;
+};
 type Row = Record<string, unknown>;
 
 export class ManageConfigurationUseCases {
-  constructor(private readonly db: Query, private readonly mutations: IdempotentMutationService, private readonly zones: TimeZoneConverter, private readonly conflicts:ConfigurationConflictService) {}
+  constructor(
+    private readonly db: Query,
+    private readonly mutations: IdempotentMutationService,
+    private readonly zones: TimeZoneConverter,
+    private readonly conflicts: ConfigurationConflictService,
+    private readonly audit: ConfigurationAuditService,
+  ) {}
 
   async getSettings(auth: Auth) {
-    const r = await this.db.query<{ slot_interval_minutes:number; minimum_advance_minutes:number }>('SELECT slot_interval_minutes,minimum_advance_minutes FROM scheduling.tenant_settings WHERE tenant_id=$1',[auth.tenantId]);
-    const row=r.rows[0]; if(!row) throw notFound(); return {slot_interval_minutes:row.slot_interval_minutes,minimum_advance_minutes:row.minimum_advance_minutes};
+    const r = await this.db.query<{
+      slot_interval_minutes: number;
+      minimum_advance_minutes: number;
+    }>(
+      'SELECT slot_interval_minutes,minimum_advance_minutes FROM scheduling.tenant_settings WHERE tenant_id=$1',
+      [auth.tenantId],
+    );
+    const row = r.rows[0];
+    if (!row) throw notFound();
+    return {
+      slot_interval_minutes: row.slot_interval_minutes,
+      minimum_advance_minutes: row.minimum_advance_minutes,
+    };
   }
-  async updateSettings(auth:Auth,key:string,input:{slot_interval_minutes:number;minimum_advance_minutes:number}) {
-    new SchedulingSettings(input.slot_interval_minutes,input.minimum_advance_minutes);
-    return this.mutate(auth,key,'updateSchedulingSettings','tenant_settings',input,async(c)=>{ const r=await c.query('UPDATE scheduling.tenant_settings SET slot_interval_minutes=$2,minimum_advance_minutes=$3,updated_at=$4 WHERE tenant_id=$1 RETURNING slot_interval_minutes,minimum_advance_minutes',[auth.tenantId,input.slot_interval_minutes,input.minimum_advance_minutes,new Date()]); const row=r.rows[0];if(!row)throw notFound();return {status:200,body:{slot_interval_minutes:row.slot_interval_minutes,minimum_advance_minutes:row.minimum_advance_minutes}}; });
+  async updateSettings(
+    auth: Auth,
+    key: string,
+    input: { slot_interval_minutes: number; minimum_advance_minutes: number },
+  ) {
+    new SchedulingSettings(input.slot_interval_minutes, input.minimum_advance_minutes);
+    return this.mutate(
+      auth,
+      key,
+      'updateSchedulingSettings',
+      'tenant_settings',
+      input,
+      async (c) => {
+        const r = await c.query(
+          'UPDATE scheduling.tenant_settings SET slot_interval_minutes=$2,minimum_advance_minutes=$3,updated_at=$4 WHERE tenant_id=$1 RETURNING slot_interval_minutes,minimum_advance_minutes',
+          [auth.tenantId, input.slot_interval_minutes, input.minimum_advance_minutes, new Date()],
+        );
+        const row = r.rows[0];
+        if (!row) throw notFound();
+        return {
+          status: 200,
+          body: {
+            slot_interval_minutes: row.slot_interval_minutes,
+            minimum_advance_minutes: row.minimum_advance_minutes,
+          },
+        };
+      },
+    );
   }
-  async getTimeZone(auth:Auth){const r=await this.db.query<{time_zone:string}>('SELECT time_zone FROM tenancy.tenants WHERE id=$1',[auth.tenantId]);if(!r.rows[0])throw notFound();return {time_zone:r.rows[0].time_zone};}
-  async updateTimeZone(auth:Auth,key:string,timeZone:string){try{new Intl.DateTimeFormat('en-US',{timeZone}).format();}catch{throw validation();}return this.mutate(auth,key,'updateTenantTimeZone','tenant', {time_zone:timeZone},async(c)=>{await this.conflicts.rejectIfAny(c,auth.tenantId,{kind:'time-zone',timeZone});await c.query('UPDATE tenancy.tenants SET time_zone=$2 WHERE id=$1',[auth.tenantId,timeZone]);return {status:204,body:null};});}
+  async getTimeZone(auth: Auth) {
+    const r = await this.db.query<{ time_zone: string }>(
+      'SELECT time_zone FROM tenancy.tenants WHERE id=$1',
+      [auth.tenantId],
+    );
+    if (!r.rows[0]) throw notFound();
+    return { time_zone: r.rows[0].time_zone };
+  }
+  async updateTimeZone(auth: Auth, key: string, timeZone: string) {
+    try {
+      new Intl.DateTimeFormat('en-US', { timeZone }).format();
+    } catch {
+      throw validation();
+    }
+    return this.mutate(
+      auth,
+      key,
+      'updateTenantTimeZone',
+      'tenant',
+      { time_zone: timeZone },
+      async (c) => {
+        await this.conflicts.rejectIfAny(c, auth.tenantId, { kind: 'time-zone', timeZone });
+        await c.query('UPDATE tenancy.tenants SET time_zone=$2 WHERE id=$1', [
+          auth.tenantId,
+          timeZone,
+        ]);
+        return { status: 204, body: null };
+      },
+    );
+  }
 
-  async listServices(auth:Auth){const r=await this.db.query(`SELECT s.id,s.name,s.description,s.duration_minutes,s.price_minor,s.currency AS currency_code,s.status,COALESCE(array_agg(ps.professional_id) FILTER(WHERE ps.professional_id IS NOT NULL),'{}') professional_ids FROM scheduling.services s LEFT JOIN scheduling.professional_services ps ON ps.tenant_id=s.tenant_id AND ps.service_id=s.id WHERE s.tenant_id=$1 GROUP BY s.id ORDER BY s.name`,[auth.tenantId]);return {services:r.rows.map(withoutNullProperties)};}
-  async createService(auth:Auth,key:string,input:{name:string;description?:string|undefined;duration_minutes:number;price_minor:number;currency_code:string;professional_ids:string[]}){const model=new Service(randomUUID(),auth.tenantId,{name:input.name,...(input.description!==undefined?{description:input.description}:{}),durationMinutes:input.duration_minutes,priceMinor:input.price_minor,currency:input.currency_code});return this.mutate(auth,key,'createService','collection',input,async(c)=>{for(const pid of [...new Set(input.professional_ids)]){const p=await c.query('SELECT 1 FROM scheduling.professionals WHERE tenant_id=$1 AND id=$2 AND status=$3',[auth.tenantId,pid,'active']);if(!p.rows.length)throw notFound();}const r=await c.query(`INSERT INTO scheduling.services(id,tenant_id,name,description,duration_minutes,price_minor,currency,status,created_at,updated_at) VALUES($1,$2,$3,$4,$5,$6,$7,'active',now(),now()) RETURNING id,name,description,duration_minutes,price_minor,currency AS currency_code,status`,[model.id,auth.tenantId,model.name,input.description??null,input.duration_minutes,input.price_minor,input.currency_code]);for(const pid of [...new Set(input.professional_ids)])await c.query('INSERT INTO scheduling.professional_services(tenant_id,professional_id,service_id,created_at) VALUES($1,$2,$3,now())',[auth.tenantId,pid,model.id]);return {status:201,body:{...withoutNullProperties(r.rows[0]??{}),professional_ids:[...new Set(input.professional_ids)]}};});}
-  async updateService(auth:Auth,key:string,id:string,input:Row){return this.mutate(auth,key,'updateService',id,input,async(c)=>{const old=await c.query('SELECT * FROM scheduling.services WHERE tenant_id=$1 AND id=$2 FOR UPDATE',[auth.tenantId,id]);const s=old.rows[0];if(!s)throw notFound();const associations=input.professional_ids as string[]|undefined;const next={name:String(input.name??s.name).trim(),description:input.description===undefined?s.description:input.description,duration_minutes:Number(input.duration_minutes??s.duration_minutes),price_minor:Number(input.price_minor??s.price_minor),currency_code:String(input.currency_code??s.currency),status:String(input.status??s.status)};new Service(id,auth.tenantId,{name:next.name,...(typeof next.description==='string'?{description:next.description}:{}),durationMinutes:next.duration_minutes,priceMinor:next.price_minor,currency:next.currency_code,status:next.status as 'active'|'inactive'});if(associations){for(const pid of [...new Set(associations)]){const p=await c.query('SELECT 1 FROM scheduling.professionals WHERE tenant_id=$1 AND id=$2 AND status=$3',[auth.tenantId,pid,'active']);if(!p.rows.length)throw notFound();}}if(next.status==='inactive'){await this.conflicts.rejectIfAny(c,auth.tenantId,{kind:'service-inactive',serviceId:id});}if(associations){await this.conflicts.rejectIfAny(c,auth.tenantId,{kind:'service-professionals',serviceId:id,professionalIds:[...new Set(associations)]});await c.query('DELETE FROM scheduling.professional_services WHERE tenant_id=$1 AND service_id=$2',[auth.tenantId,id]);for(const pid of [...new Set(associations)])await c.query('INSERT INTO scheduling.professional_services(tenant_id,professional_id,service_id,created_at) VALUES($1,$2,$3,now())',[auth.tenantId,pid,id]);}const r=await c.query(`UPDATE scheduling.services SET name=$3,description=$4,duration_minutes=$5,price_minor=$6,currency=$7,status=$8,updated_at=now() WHERE tenant_id=$1 AND id=$2 RETURNING id,name,description,duration_minutes,price_minor,currency AS currency_code,status`,[auth.tenantId,id,next.name,next.description??null,next.duration_minutes,next.price_minor,next.currency_code,next.status]);return {status:200,body:{...withoutNullProperties(r.rows[0]??{}),professional_ids:associations??(await c.query<{professional_id:string}>('SELECT professional_id FROM scheduling.professional_services WHERE tenant_id=$1 AND service_id=$2',[auth.tenantId,id])).rows.map(x=>x.professional_id)}};});}
-
-  async listProfessionals(auth:Auth){const r=await this.db.query('SELECT id,name AS display_name,status FROM scheduling.professionals WHERE tenant_id=$1 ORDER BY name',[auth.tenantId]);return {professionals:r.rows};}
-  async createProfessional(auth:Auth,key:string,name:string){const model=new Professional(randomUUID(),auth.tenantId,name);return this.mutate(auth,key,'createProfessional','collection',{display_name:name},async(c)=>{const r=await c.query(`INSERT INTO scheduling.professionals(id,tenant_id,name,status,created_at,updated_at) VALUES($1,$2,$3,'active',now(),now()) RETURNING id,name AS display_name,status`,[model.id,auth.tenantId,model.displayName]);return {status:201,body:r.rows[0]};});}
-  async updateProfessional(auth:Auth,key:string,id:string,input:{display_name?:string|undefined;status?:'active'|'inactive'|undefined}){return this.mutate(auth,key,'updateProfessional',id,input,async(c)=>{const old=await c.query('SELECT id,name,status FROM scheduling.professionals WHERE tenant_id=$1 AND id=$2 FOR UPDATE',[auth.tenantId,id]);if(!old.rows[0])throw notFound();const name=input.display_name?.trim()??String(old.rows[0].name);const status=input.status??old.rows[0].status;new Professional(id,auth.tenantId,name,status as 'active'|'inactive');if(status==='inactive'){await this.conflicts.rejectIfAny(c,auth.tenantId,{kind:'professional-inactive',professionalId:id});}const r=await c.query('UPDATE scheduling.professionals SET name=$3,status=$4,updated_at=now() WHERE tenant_id=$1 AND id=$2 RETURNING id,name AS display_name,status',[auth.tenantId,id,name,status]);return {status:200,body:r.rows[0]};});}
-  async getPeriods(auth:Auth,id:string){await this.requireProfessional(this.db,auth.tenantId,id);const r=await this.db.query('SELECT iso_weekday,starts_at::text AS starts_local_time,ends_at::text AS ends_local_time FROM scheduling.weekly_periods WHERE tenant_id=$1 AND professional_id=$2 ORDER BY iso_weekday,starts_at',[auth.tenantId,id]);return {periods:r.rows};}
-  async replacePeriods(auth:Auth,key:string,id:string,periods:WeeklyWorkPeriod[]){try{validateWeeklyWorkPeriods(periods);}catch{throw validation();}return this.mutate(auth,key,'replaceWeeklyWorkPeriods',id,{periods},async(c)=>{await this.requireProfessional(c,auth.tenantId,id);await this.conflicts.rejectIfAny(c,auth.tenantId,{kind:'weekly-periods',professionalId:id,periods});await c.query('DELETE FROM scheduling.weekly_periods WHERE tenant_id=$1 AND professional_id=$2',[auth.tenantId,id]);for(const p of periods)await c.query('INSERT INTO scheduling.weekly_periods(id,tenant_id,professional_id,iso_weekday,starts_at,ends_at,created_at,updated_at) VALUES($1,$2,$3,$4,$5,$6,now(),now())',[randomUUID(),auth.tenantId,id,p.isoWeekday,p.startsLocalTime,p.endsLocalTime]);return {status:200,body:{periods}};});}
-  async listExceptions(auth:Auth,id:string,from:string,to:string){
-    await this.requireProfessional(this.db,auth.tenantId,id);if(Date.parse(to)<=Date.parse(from))throw validation();
-    const [r,tz]=await Promise.all([this.db.query('SELECT id,kind,starts_at,ends_at,reason FROM scheduling.availability_exceptions WHERE tenant_id=$1 AND professional_id=$2 AND starts_at<$4 AND ends_at>$3 ORDER BY starts_at',[auth.tenantId,id,from,to]),this.db.query<{time_zone:string}>('SELECT time_zone FROM tenancy.tenants WHERE id=$1',[auth.tenantId])]);
-    const zone=tz.rows[0]?.time_zone;if(!zone)throw notFound();
-    return {exceptions:r.rows.map(row=>({...withoutNullProperties(row),starts_at:this.zones.instantToOffsetDateTime(new Date(row.starts_at as string|Date),zone),ends_at:this.zones.instantToOffsetDateTime(new Date(row.ends_at as string|Date),zone)}))};
+  async listServices(auth: Auth) {
+    const r = await this.db.query(
+      `SELECT s.id,s.name,s.description,s.duration_minutes,s.price_minor,s.currency AS currency_code,s.status,COALESCE(array_agg(ps.professional_id) FILTER(WHERE ps.professional_id IS NOT NULL),'{}') professional_ids FROM scheduling.services s LEFT JOIN scheduling.professional_services ps ON ps.tenant_id=s.tenant_id AND ps.service_id=s.id WHERE s.tenant_id=$1 GROUP BY s.id ORDER BY s.name`,
+      [auth.tenantId],
+    );
+    return { services: r.rows.map(withoutNullProperties) };
   }
-  async createException(auth:Auth,key:string,id:string,input:{kind:'break'|'time_off'|'holiday'|'blocked';starts_at:string;ends_at:string;reason?:string|undefined}){
-    let model:AvailabilityException;try{model=new AvailabilityException(auth.tenantId,id,input.kind,new Date(input.starts_at),new Date(input.ends_at),input.reason);}catch{throw validation();}
-    return this.mutate(auth,key,'createAvailabilityException',id,input,async(c)=>{
-      await this.requireProfessional(c,auth.tenantId,id);
-      await this.conflicts.rejectIfAny(c,auth.tenantId,{kind:'exception',professionalId:id,startsAt:model.startsAt,endsAt:model.endsAt});
-      const result=await c.query(`INSERT INTO scheduling.availability_exceptions(id,tenant_id,professional_id,kind,starts_at,ends_at,reason,created_by_membership_id,created_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,now()) RETURNING id,kind,starts_at,ends_at,reason`,[randomUUID(),auth.tenantId,id,model.kind,model.startsAt,model.endsAt,model.reason??null,auth.membershipId]);
-      const [row,tz]=[result.rows[0],await c.query<{time_zone:string}>('SELECT time_zone FROM tenancy.tenants WHERE id=$1',[auth.tenantId])];if(!row||!tz.rows[0])throw notFound();const zone=tz.rows[0].time_zone;
-      return {status:201,body:withoutNullProperties({id:row.id,kind:row.kind,reason:row.reason,starts_at:this.zones.instantToOffsetDateTime(new Date(row.starts_at as string|Date),zone),ends_at:this.zones.instantToOffsetDateTime(new Date(row.ends_at as string|Date),zone)})};
+  async createService(
+    auth: Auth,
+    key: string,
+    input: {
+      name: string;
+      description?: string | undefined;
+      duration_minutes: number;
+      price_minor: number;
+      currency_code: string;
+      professional_ids: string[];
+    },
+  ) {
+    const model = new Service(randomUUID(), auth.tenantId, {
+      name: input.name,
+      ...(input.description !== undefined ? { description: input.description } : {}),
+      durationMinutes: input.duration_minutes,
+      priceMinor: input.price_minor,
+      currency: input.currency_code,
+    });
+    return this.mutate(auth, key, 'createService', 'collection', input, async (c) => {
+      for (const pid of [...new Set(input.professional_ids)]) {
+        const p = await c.query(
+          'SELECT 1 FROM scheduling.professionals WHERE tenant_id=$1 AND id=$2 AND status=$3',
+          [auth.tenantId, pid, 'active'],
+        );
+        if (!p.rows.length) throw notFound();
+      }
+      const r = await c.query(
+        `INSERT INTO scheduling.services(id,tenant_id,name,description,duration_minutes,price_minor,currency,status,created_at,updated_at) VALUES($1,$2,$3,$4,$5,$6,$7,'active',now(),now()) RETURNING id,name,description,duration_minutes,price_minor,currency AS currency_code,status`,
+        [
+          model.id,
+          auth.tenantId,
+          model.name,
+          input.description ?? null,
+          input.duration_minutes,
+          input.price_minor,
+          input.currency_code,
+        ],
+      );
+      for (const pid of [...new Set(input.professional_ids)])
+        await c.query(
+          'INSERT INTO scheduling.professional_services(tenant_id,professional_id,service_id,created_at) VALUES($1,$2,$3,now())',
+          [auth.tenantId, pid, model.id],
+        );
+      return {
+        status: 201,
+        body: {
+          ...withoutNullProperties(r.rows[0] ?? {}),
+          professional_ids: [...new Set(input.professional_ids)],
+        },
+      };
     });
   }
-  async deleteException(auth:Auth,key:string,id:string,exceptionId:string){return this.mutate(auth,key,'deleteAvailabilityException',`${id}:${exceptionId}`,{},async(c)=>{await this.requireProfessional(c,auth.tenantId,id);await c.query('DELETE FROM scheduling.availability_exceptions WHERE tenant_id=$1 AND professional_id=$2 AND id=$3',[auth.tenantId,id,exceptionId]);return {status:204,body:null};});}
+  async updateService(auth: Auth, key: string, id: string, input: Row) {
+    return this.mutate(auth, key, 'updateService', id, input, async (c) => {
+      const old = await c.query(
+        'SELECT * FROM scheduling.services WHERE tenant_id=$1 AND id=$2 FOR UPDATE',
+        [auth.tenantId, id],
+      );
+      const s = old.rows[0];
+      if (!s) throw notFound();
+      const associations = input.professional_ids as string[] | undefined;
+      const next = {
+        name: String(input.name ?? s.name).trim(),
+        description: input.description === undefined ? s.description : input.description,
+        duration_minutes: Number(input.duration_minutes ?? s.duration_minutes),
+        price_minor: Number(input.price_minor ?? s.price_minor),
+        currency_code: String(input.currency_code ?? s.currency),
+        status: String(input.status ?? s.status),
+      };
+      new Service(id, auth.tenantId, {
+        name: next.name,
+        ...(typeof next.description === 'string' ? { description: next.description } : {}),
+        durationMinutes: next.duration_minutes,
+        priceMinor: next.price_minor,
+        currency: next.currency_code,
+        status: next.status as 'active' | 'inactive',
+      });
+      if (associations) {
+        for (const pid of [...new Set(associations)]) {
+          const p = await c.query(
+            'SELECT 1 FROM scheduling.professionals WHERE tenant_id=$1 AND id=$2 AND status=$3',
+            [auth.tenantId, pid, 'active'],
+          );
+          if (!p.rows.length) throw notFound();
+        }
+      }
+      if (next.status === 'inactive') {
+        await this.conflicts.rejectIfAny(c, auth.tenantId, {
+          kind: 'service-inactive',
+          serviceId: id,
+        });
+      }
+      if (associations) {
+        await this.conflicts.rejectIfAny(c, auth.tenantId, {
+          kind: 'service-professionals',
+          serviceId: id,
+          professionalIds: [...new Set(associations)],
+        });
+        await c.query(
+          'DELETE FROM scheduling.professional_services WHERE tenant_id=$1 AND service_id=$2',
+          [auth.tenantId, id],
+        );
+        for (const pid of [...new Set(associations)])
+          await c.query(
+            'INSERT INTO scheduling.professional_services(tenant_id,professional_id,service_id,created_at) VALUES($1,$2,$3,now())',
+            [auth.tenantId, pid, id],
+          );
+      }
+      const r = await c.query(
+        `UPDATE scheduling.services SET name=$3,description=$4,duration_minutes=$5,price_minor=$6,currency=$7,status=$8,updated_at=now() WHERE tenant_id=$1 AND id=$2 RETURNING id,name,description,duration_minutes,price_minor,currency AS currency_code,status`,
+        [
+          auth.tenantId,
+          id,
+          next.name,
+          next.description ?? null,
+          next.duration_minutes,
+          next.price_minor,
+          next.currency_code,
+          next.status,
+        ],
+      );
+      return {
+        status: 200,
+        body: {
+          ...withoutNullProperties(r.rows[0] ?? {}),
+          professional_ids:
+            associations ??
+            (
+              await c.query<{ professional_id: string }>(
+                'SELECT professional_id FROM scheduling.professional_services WHERE tenant_id=$1 AND service_id=$2',
+                [auth.tenantId, id],
+              )
+            ).rows.map((x) => x.professional_id),
+        },
+      };
+    });
+  }
 
-  private async mutate(auth:Auth,key:string,operation:string,resource:string,request:unknown,fn:(context:Query)=>Promise<{status:number;body:unknown}>){const result=await this.mutations.execute(auth.tenantId,{tenantId:auth.tenantId,actorScope:auth.membershipId,operation,resourceScope:resource,key},request,async(context)=>{const response=await fn(context);return {result:response.body,response:{status:response.status,headers:{},body:response.body}};});return result.value;}
-  private async requireProfessional(q:Query,tenantId:string,id:string){const r=await q.query('SELECT 1 FROM scheduling.professionals WHERE tenant_id=$1 AND id=$2',[tenantId,id]);if(!r.rows.length)throw notFound();}
+  async listProfessionals(auth: Auth) {
+    const r = await this.db.query(
+      'SELECT id,name AS display_name,status FROM scheduling.professionals WHERE tenant_id=$1 ORDER BY name',
+      [auth.tenantId],
+    );
+    return { professionals: r.rows };
+  }
+  async createProfessional(auth: Auth, key: string, name: string) {
+    const model = new Professional(randomUUID(), auth.tenantId, name);
+    return this.mutate(
+      auth,
+      key,
+      'createProfessional',
+      'collection',
+      { display_name: name },
+      async (c) => {
+        const r = await c.query(
+          `INSERT INTO scheduling.professionals(id,tenant_id,name,status,created_at,updated_at) VALUES($1,$2,$3,'active',now(),now()) RETURNING id,name AS display_name,status`,
+          [model.id, auth.tenantId, model.displayName],
+        );
+        return { status: 201, body: r.rows[0] };
+      },
+    );
+  }
+  async updateProfessional(
+    auth: Auth,
+    key: string,
+    id: string,
+    input: { display_name?: string | undefined; status?: 'active' | 'inactive' | undefined },
+  ) {
+    return this.mutate(auth, key, 'updateProfessional', id, input, async (c) => {
+      const old = await c.query(
+        'SELECT id,name,status FROM scheduling.professionals WHERE tenant_id=$1 AND id=$2 FOR UPDATE',
+        [auth.tenantId, id],
+      );
+      if (!old.rows[0]) throw notFound();
+      const name = input.display_name?.trim() ?? String(old.rows[0].name);
+      const status = input.status ?? old.rows[0].status;
+      new Professional(id, auth.tenantId, name, status as 'active' | 'inactive');
+      if (status === 'inactive') {
+        await this.conflicts.rejectIfAny(c, auth.tenantId, {
+          kind: 'professional-inactive',
+          professionalId: id,
+        });
+      }
+      const r = await c.query(
+        'UPDATE scheduling.professionals SET name=$3,status=$4,updated_at=now() WHERE tenant_id=$1 AND id=$2 RETURNING id,name AS display_name,status',
+        [auth.tenantId, id, name, status],
+      );
+      return { status: 200, body: r.rows[0] };
+    });
+  }
+  async getPeriods(auth: Auth, id: string) {
+    await this.requireProfessional(this.db, auth.tenantId, id);
+    const r = await this.db.query(
+      'SELECT iso_weekday,starts_at::text AS starts_local_time,ends_at::text AS ends_local_time FROM scheduling.weekly_periods WHERE tenant_id=$1 AND professional_id=$2 ORDER BY iso_weekday,starts_at',
+      [auth.tenantId, id],
+    );
+    return { periods: r.rows };
+  }
+  async replacePeriods(auth: Auth, key: string, id: string, periods: WeeklyWorkPeriod[]) {
+    try {
+      validateWeeklyWorkPeriods(periods);
+    } catch {
+      throw validation();
+    }
+    return this.mutate(auth, key, 'replaceWeeklyWorkPeriods', id, { periods }, async (c) => {
+      await this.requireProfessional(c, auth.tenantId, id);
+      await this.conflicts.rejectIfAny(c, auth.tenantId, {
+        kind: 'weekly-periods',
+        professionalId: id,
+        periods,
+      });
+      await c.query(
+        'DELETE FROM scheduling.weekly_periods WHERE tenant_id=$1 AND professional_id=$2',
+        [auth.tenantId, id],
+      );
+      for (const p of periods)
+        await c.query(
+          'INSERT INTO scheduling.weekly_periods(id,tenant_id,professional_id,iso_weekday,starts_at,ends_at,created_at,updated_at) VALUES($1,$2,$3,$4,$5,$6,now(),now())',
+          [randomUUID(), auth.tenantId, id, p.isoWeekday, p.startsLocalTime, p.endsLocalTime],
+        );
+      return { status: 200, body: { periods } };
+    });
+  }
+  async listExceptions(auth: Auth, id: string, from: string, to: string) {
+    await this.requireProfessional(this.db, auth.tenantId, id);
+    if (Date.parse(to) <= Date.parse(from)) throw validation();
+    const [r, tz] = await Promise.all([
+      this.db.query(
+        'SELECT id,kind,starts_at,ends_at,reason FROM scheduling.availability_exceptions WHERE tenant_id=$1 AND professional_id=$2 AND starts_at<$4 AND ends_at>$3 ORDER BY starts_at',
+        [auth.tenantId, id, from, to],
+      ),
+      this.db.query<{ time_zone: string }>('SELECT time_zone FROM tenancy.tenants WHERE id=$1', [
+        auth.tenantId,
+      ]),
+    ]);
+    const zone = tz.rows[0]?.time_zone;
+    if (!zone) throw notFound();
+    return {
+      exceptions: r.rows.map((row) => ({
+        ...withoutNullProperties(row),
+        starts_at: this.zones.instantToOffsetDateTime(
+          new Date(row.starts_at as string | Date),
+          zone,
+        ),
+        ends_at: this.zones.instantToOffsetDateTime(new Date(row.ends_at as string | Date), zone),
+      })),
+    };
+  }
+  async createException(
+    auth: Auth,
+    key: string,
+    id: string,
+    input: {
+      kind: 'break' | 'time_off' | 'holiday' | 'blocked';
+      starts_at: string;
+      ends_at: string;
+      reason?: string | undefined;
+    },
+  ) {
+    let model: AvailabilityException;
+    try {
+      model = new AvailabilityException(
+        auth.tenantId,
+        id,
+        input.kind,
+        new Date(input.starts_at),
+        new Date(input.ends_at),
+        input.reason,
+      );
+    } catch {
+      throw validation();
+    }
+    return this.mutate(auth, key, 'createAvailabilityException', id, input, async (c) => {
+      await this.requireProfessional(c, auth.tenantId, id);
+      await this.conflicts.rejectIfAny(c, auth.tenantId, {
+        kind: 'exception',
+        professionalId: id,
+        startsAt: model.startsAt,
+        endsAt: model.endsAt,
+      });
+      const result = await c.query(
+        `INSERT INTO scheduling.availability_exceptions(id,tenant_id,professional_id,kind,starts_at,ends_at,reason,created_by_membership_id,created_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,now()) RETURNING id,kind,starts_at,ends_at,reason`,
+        [
+          randomUUID(),
+          auth.tenantId,
+          id,
+          model.kind,
+          model.startsAt,
+          model.endsAt,
+          model.reason ?? null,
+          auth.membershipId,
+        ],
+      );
+      const [row, tz] = [
+        result.rows[0],
+        await c.query<{ time_zone: string }>('SELECT time_zone FROM tenancy.tenants WHERE id=$1', [
+          auth.tenantId,
+        ]),
+      ];
+      if (!row || !tz.rows[0]) throw notFound();
+      const zone = tz.rows[0].time_zone;
+      return {
+        status: 201,
+        body: withoutNullProperties({
+          id: row.id,
+          kind: row.kind,
+          reason: row.reason,
+          starts_at: this.zones.instantToOffsetDateTime(
+            new Date(row.starts_at as string | Date),
+            zone,
+          ),
+          ends_at: this.zones.instantToOffsetDateTime(new Date(row.ends_at as string | Date), zone),
+        }),
+      };
+    });
+  }
+  async deleteException(auth: Auth, key: string, id: string, exceptionId: string) {
+    return this.mutate(
+      auth,
+      key,
+      'deleteAvailabilityException',
+      `${id}:${exceptionId}`,
+      {},
+      async (c) => {
+        await this.requireProfessional(c, auth.tenantId, id);
+        await c.query(
+          'DELETE FROM scheduling.availability_exceptions WHERE tenant_id=$1 AND professional_id=$2 AND id=$3',
+          [auth.tenantId, id, exceptionId],
+        );
+        return { status: 204, body: null };
+      },
+    );
+  }
+
+  private async mutate(
+    auth: Auth,
+    key: string,
+    operation: ConfigurationOperation,
+    resource: string,
+    request: unknown,
+    fn: (context: Query) => Promise<{ status: number; body: unknown }>,
+  ) {
+    const result = await this.mutations.execute(
+      auth.tenantId,
+      {
+        tenantId: auth.tenantId,
+        actorScope: auth.membershipId,
+        operation,
+        resourceScope: resource,
+        key,
+        ...(auth.correlationId ? { correlationId: auth.correlationId } : {}),
+      },
+      request,
+      async (context, now) => {
+        const response = await this.audit.run(context, { ...auth, operation, resource, now }, () =>
+          fn(context),
+        );
+        return {
+          result: response.body,
+          response: { status: response.status, headers: {}, body: response.body },
+        };
+      },
+    );
+    return result.value;
+  }
+  private async requireProfessional(q: Query, tenantId: string, id: string) {
+    const r = await q.query('SELECT 1 FROM scheduling.professionals WHERE tenant_id=$1 AND id=$2', [
+      tenantId,
+      id,
+    ]);
+    if (!r.rows.length) throw notFound();
+  }
 }
-function withoutNullProperties(value:Row):Row{return Object.fromEntries(Object.entries(value).filter(([,item])=>item!==null));}
-function notFound(){return new ApplicationError(404,'not_found','Resource not found');}
-function validation(){return new ApplicationError(422,'validation_error','Invalid request');}
+function withoutNullProperties(value: Row): Row {
+  return Object.fromEntries(Object.entries(value).filter(([, item]) => item !== null));
+}
+function notFound() {
+  return new ApplicationError(404, 'not_found', 'Resource not found');
+}
+function validation() {
+  return new ApplicationError(422, 'validation_error', 'Invalid request');
+}
