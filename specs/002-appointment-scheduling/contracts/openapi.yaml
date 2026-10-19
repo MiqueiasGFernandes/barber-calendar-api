@@ -1,0 +1,779 @@
+openapi: 3.1.0
+info:
+  title: API de Agendamento da Barber Calendar
+  version: 1.0.0
+  description: Contrato de catálogo, disponibilidade e reservas por tenant.
+servers:
+  - url: /v1
+paths:
+  /public/tenants/{tenant_slug}/services:
+    get:
+      operationId: listPublicServices
+      summary: Listar serviços ativos publicados pela barbearia
+      tags: [Disponibilidade Pública]
+      parameters:
+        - $ref: '#/components/parameters/TenantSlug'
+      responses:
+        '200':
+          description: Serviços ativos e profissionais elegíveis
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [services]
+                properties:
+                  services:
+                    type: array
+                    items: { $ref: '#/components/schemas/PublicService' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /public/tenants/{tenant_slug}/availability:
+    get:
+      operationId: getPublicAvailability
+      summary: Consultar horários livres para serviço e data
+      tags: [Disponibilidade Pública]
+      parameters:
+        - $ref: '#/components/parameters/TenantSlug'
+        - name: service_id
+          in: query
+          required: true
+          schema: { type: string, format: uuid }
+        - name: date
+          in: query
+          required: true
+          description: Data local da barbearia, de hoje até 30 dias corridos à frente, em ISO 8601
+          schema: { type: string, format: date }
+        - name: professional_id
+          in: query
+          required: false
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Inícios candidatos e profissionais elegíveis
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [date, time_zone, service, slots]
+                properties:
+                  date: { type: string, format: date }
+                  time_zone: { type: string, example: America/Sao_Paulo }
+                  service: { $ref: '#/components/schemas/PublicService' }
+                  slots:
+                    type: array
+                    items: { $ref: '#/components/schemas/AvailableSlot' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationFailure' }
+
+  /public/tenants/{tenant_slug}/appointments:
+    post:
+      operationId: createGuestAppointment
+      summary: Reservar um horário sem criar conta
+      tags: [Agendamentos Públicos]
+      parameters:
+        - $ref: '#/components/parameters/TenantSlug'
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema: { type: string, minLength: 16, maxLength: 128 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/GuestAppointmentRequest' }
+      responses:
+        '201':
+          description: Horário reservado e confirmado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/GuestAppointmentResponse' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/SlotConflict' }
+        '422': { $ref: '#/components/responses/ValidationFailure' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /management/time-zone:
+    get:
+      operationId: getTenantTimeZone
+      summary: Consultar o fuso horário local da barbearia
+      tags: [Gestão]
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Fuso IANA configurado para o tenant autenticado
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [time_zone]
+                properties:
+                  time_zone: { type: string, example: America/Sao_Paulo }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    put:
+      operationId: updateTenantTimeZone
+      summary: Configurar o fuso horário local da barbearia
+      tags: [Gestão]
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [time_zone]
+              properties:
+                time_zone: { type: string, example: America/Sao_Paulo }
+      responses:
+        '204': { description: Fuso atualizado; agendamentos existentes não mudam de instante }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationFailure' }
+
+  /management/services:
+    get:
+      operationId: listManagementServices
+      summary: Consultar catálogo de serviços da própria barbearia
+      tags: [Gestão]
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Catálogo do tenant autorizado
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [services]
+                properties:
+                  services:
+                    type: array
+                    items: { $ref: '#/components/schemas/ManagedService' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      operationId: createService
+      summary: Cadastrar serviço e profissionais aptos
+      tags: [Gestão]
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ServiceInput' }
+      responses:
+        '201':
+          description: Serviço criado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ManagedService' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationFailure' }
+
+  /management/services/{service_id}:
+    patch:
+      operationId: updateService
+      summary: Atualizar ou desativar serviço
+      tags: [Gestão]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: service_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ServicePatch' }
+      responses:
+        '200':
+          description: Serviço atualizado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ManagedService' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/HasBookings' }
+        '422': { $ref: '#/components/responses/ValidationFailure' }
+
+  /management/professionals:
+    get:
+      operationId: listProfessionals
+      summary: Consultar profissionais da própria barbearia
+      tags: [Gestão]
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Profissionais do tenant autorizado
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [professionals]
+                properties:
+                  professionals:
+                    type: array
+                    items: { $ref: '#/components/schemas/Professional' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    post:
+      operationId: createProfessional
+      summary: Cadastrar profissional
+      tags: [Gestão]
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProfessionalInput' }
+      responses:
+        '201':
+          description: Profissional criado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Professional' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationFailure' }
+
+  /management/professionals/{professional_id}:
+    patch:
+      operationId: updateProfessional
+      summary: Atualizar ou desativar profissional
+      tags: [Gestão]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: professional_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ProfessionalPatch' }
+      responses:
+        '200':
+          description: Profissional atualizado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Professional' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/HasBookings' }
+        '422': { $ref: '#/components/responses/ValidationFailure' }
+
+  /management/professionals/{professional_id}/weekly-periods:
+    get:
+      operationId: getWeeklyWorkPeriods
+      summary: Consultar períodos semanais de trabalho do profissional
+      tags: [Gestão]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: professional_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Jornada semanal do profissional no tenant autorizado
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [periods]
+                properties:
+                  periods:
+                    type: array
+                    items: { $ref: '#/components/schemas/WeeklyWorkPeriodInput' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    put:
+      operationId: replaceWeeklyWorkPeriods
+      summary: Definir períodos semanais de trabalho do profissional
+      tags: [Gestão]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: professional_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [periods]
+              properties:
+                periods:
+                  type: array
+                  items: { $ref: '#/components/schemas/WeeklyWorkPeriodInput' }
+      responses:
+        '200':
+          description: Jornada semanal substituída
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [periods]
+                properties:
+                  periods:
+                    type: array
+                    items: { $ref: '#/components/schemas/WeeklyWorkPeriodInput' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/HasBookings' }
+        '422': { $ref: '#/components/responses/ValidationFailure' }
+
+  /management/professionals/{professional_id}/exceptions:
+    get:
+      operationId: listAvailabilityExceptions
+      summary: Consultar pausas, folgas e bloqueios pontuais
+      tags: [Gestão]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: professional_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: starts_from
+          in: query
+          required: true
+          schema: { type: string, format: date-time }
+        - name: ends_before
+          in: query
+          required: true
+          schema: { type: string, format: date-time }
+      responses:
+        '200':
+          description: Exceções no período do profissional e tenant autorizados
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [exceptions]
+                properties:
+                  exceptions:
+                    type: array
+                    items: { $ref: '#/components/schemas/AvailabilityException' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    post:
+      operationId: createAvailabilityException
+      summary: Criar pausa, folga ou bloqueio pontual
+      tags: [Gestão]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: professional_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AvailabilityExceptionInput' }
+      responses:
+        '201':
+          description: Exceção criada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AvailabilityException' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/HasBookings' }
+        '422': { $ref: '#/components/responses/ValidationFailure' }
+
+  /management/professionals/{professional_id}/exceptions/{exception_id}:
+    delete:
+      operationId: deleteAvailabilityException
+      summary: Remover exceção de disponibilidade
+      tags: [Gestão]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: professional_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: exception_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '204': { description: Exceção removida }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /management/appointments:
+    get:
+      operationId: listAppointments
+      summary: Consultar agenda da própria barbearia
+      tags: [Gestão]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: starts_from
+          in: query
+          required: true
+          schema: { type: string, format: date-time }
+        - name: ends_before
+          in: query
+          required: true
+          schema: { type: string, format: date-time }
+        - name: professional_id
+          in: query
+          required: false
+          schema: { type: string, format: uuid }
+        - name: status
+          in: query
+          required: false
+          schema: { $ref: '#/components/schemas/AppointmentStatus' }
+      responses:
+        '200':
+          description: Agendamentos do período no tenant autorizado
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [appointments]
+                properties:
+                  appointments:
+                    type: array
+                    items: { $ref: '#/components/schemas/ManagedAppointment' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationFailure' }
+
+  /management/appointments/{appointment_id}/cancellation:
+    post:
+      operationId: cancelAppointment
+      summary: Cancelar agendamento e liberar o intervalo
+      tags: [Gestão]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: appointment_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Agendamento cancelado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ManagedAppointment' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/InvalidTransition' }
+
+  /management/appointments/{appointment_id}/rescheduling:
+    post:
+      operationId: rescheduleAppointment
+      summary: Reagendar mantendo atualização atômica
+      tags: [Gestão]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: appointment_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [starts_at]
+              properties:
+                starts_at: { type: string, format: date-time }
+      responses:
+        '200':
+          description: Novo intervalo confirmado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ManagedAppointment' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/SlotConflict' }
+        '422': { $ref: '#/components/responses/ValidationFailure' }
+
+  /management/appointments/{appointment_id}/outcome:
+    post:
+      operationId: recordAppointmentOutcome
+      summary: Marcar atendimento concluído ou não comparecimento
+      tags: [Gestão]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: appointment_id
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [status]
+              properties:
+                status: { type: string, enum: [attended, no_show] }
+      responses:
+        '200':
+          description: Resultado registrado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ManagedAppointment' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/InvalidTransition' }
+        '422': { $ref: '#/components/responses/ValidationFailure' }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    TenantSlug:
+      name: tenant_slug
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: '^[a-z0-9]+(?:-[a-z0-9]+)*$'
+        minLength: 3
+        maxLength: 80
+  schemas:
+    AppointmentStatus:
+      type: string
+      enum: [confirmed, cancelled, attended, no_show]
+    PublicService:
+      type: object
+      additionalProperties: false
+      required: [id, name, duration_minutes, price_minor, currency_code, professionals]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        duration_minutes: { type: integer, minimum: 1, maximum: 480 }
+        price_minor: { type: integer, minimum: 0 }
+        currency_code: { type: string, pattern: '^[A-Z]{3}$' }
+        professionals:
+          type: array
+          items: { $ref: '#/components/schemas/PublicProfessional' }
+    PublicProfessional:
+      type: object
+      additionalProperties: false
+      required: [id, display_name]
+      properties:
+        id: { type: string, format: uuid }
+        display_name: { type: string }
+    ManagedService:
+      type: object
+      additionalProperties: false
+      required: [id, name, duration_minutes, price_minor, currency_code, professional_ids, status]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string, minLength: 1, maxLength: 120 }
+        description: { type: string, maxLength: 1000 }
+        duration_minutes: { type: integer, minimum: 1, maximum: 480 }
+        price_minor: { type: integer, minimum: 0 }
+        currency_code: { type: string, pattern: '^[A-Z]{3}$' }
+        professional_ids:
+          type: array
+          items: { type: string, format: uuid }
+        status: { type: string, enum: [active, inactive] }
+    ServiceInput:
+      type: object
+      additionalProperties: false
+      required: [name, duration_minutes, price_minor, currency_code, professional_ids]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
+        description: { type: string, maxLength: 1000 }
+        duration_minutes: { type: integer, minimum: 1, maximum: 480 }
+        price_minor: { type: integer, minimum: 0 }
+        currency_code: { type: string, pattern: '^[A-Z]{3}$' }
+        professional_ids:
+          type: array
+          minItems: 1
+          items: { type: string, format: uuid }
+    ServicePatch:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        name: { type: string, minLength: 1, maxLength: 120 }
+        description: { type: string, maxLength: 1000 }
+        duration_minutes: { type: integer, minimum: 1, maximum: 480 }
+        price_minor: { type: integer, minimum: 0 }
+        currency_code: { type: string, pattern: '^[A-Z]{3}$' }
+        status: { type: string, enum: [active, inactive] }
+        professional_ids:
+          type: array
+          items: { type: string, format: uuid }
+    Professional:
+      type: object
+      additionalProperties: false
+      required: [id, display_name, status]
+      properties:
+        id: { type: string, format: uuid }
+        display_name: { type: string, minLength: 1, maxLength: 120 }
+        status: { type: string, enum: [active, inactive] }
+    ProfessionalInput:
+      type: object
+      additionalProperties: false
+      required: [display_name]
+      properties:
+        display_name: { type: string, minLength: 1, maxLength: 120 }
+    ProfessionalPatch:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      properties:
+        display_name: { type: string, minLength: 1, maxLength: 120 }
+        status: { type: string, enum: [active, inactive] }
+    WeeklyWorkPeriodInput:
+      type: object
+      additionalProperties: false
+      required: [iso_weekday, starts_local_time, ends_local_time]
+      properties:
+        iso_weekday: { type: integer, minimum: 1, maximum: 7 }
+        starts_local_time: { type: string, format: time }
+        ends_local_time: { type: string, format: time }
+    AvailabilityExceptionInput:
+      type: object
+      additionalProperties: false
+      required: [kind, starts_at, ends_at]
+      properties:
+        kind: { type: string, enum: [break, time_off, holiday, blocked] }
+        starts_at: { type: string, format: date-time }
+        ends_at: { type: string, format: date-time }
+        reason: { type: string, maxLength: 240 }
+    AvailabilityException:
+      type: object
+      additionalProperties: false
+      required: [id, kind, starts_at, ends_at]
+      properties:
+        id: { type: string, format: uuid }
+        kind: { type: string, enum: [break, time_off, holiday, blocked] }
+        starts_at: { type: string, format: date-time }
+        ends_at: { type: string, format: date-time }
+        reason: { type: string, maxLength: 240 }
+    AvailableSlot:
+      type: object
+      additionalProperties: false
+      required: [starts_at, ends_at, professional_id, professional_name]
+      properties:
+        starts_at: { type: string, format: date-time }
+        ends_at: { type: string, format: date-time }
+        professional_id: { type: string, format: uuid }
+        professional_name: { type: string }
+    GuestAppointmentRequest:
+      type: object
+      additionalProperties: false
+      required: [service_id, starts_at, guest_name, guest_phone, guest_email]
+      properties:
+        service_id: { type: string, format: uuid }
+        professional_id:
+          type: [string, 'null']
+          format: uuid
+          description: Omitir ou usar null para aceitar qualquer profissional elegível.
+        starts_at: { type: string, format: date-time }
+        guest_name: { type: string, minLength: 1, maxLength: 160 }
+        guest_phone: { type: string, pattern: '^\+[1-9][0-9]{7,14}$' }
+        guest_email: { type: string, format: email, maxLength: 254 }
+    GuestAppointmentResponse:
+      type: object
+      additionalProperties: false
+      required: [id, status, service_name, professional_name, starts_at, ends_at]
+      properties:
+        id: { type: string, format: uuid }
+        status: { type: string, const: confirmed }
+        service_name: { type: string }
+        professional_name: { type: string }
+        starts_at: { type: string, format: date-time }
+        ends_at: { type: string, format: date-time }
+    ManagedAppointment:
+      type: object
+      additionalProperties: false
+      required: [id, status, service_id, service_name, professional_id, professional_name, starts_at, ends_at, guest_name, guest_phone, guest_email]
+      properties:
+        id: { type: string, format: uuid }
+        status: { $ref: '#/components/schemas/AppointmentStatus' }
+        service_id: { type: string, format: uuid }
+        service_name: { type: string }
+        professional_id: { type: string, format: uuid }
+        professional_name: { type: string }
+        starts_at: { type: string, format: date-time }
+        ends_at: { type: string, format: date-time }
+        guest_name: { type: string }
+        guest_phone: { type: string }
+        guest_email: { type: string, format: email }
+    Problem:
+      type: object
+      additionalProperties: false
+      required: [type, title, status, correlation_id]
+      properties:
+        type: { type: string, format: uri-reference }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        correlation_id: { type: string, format: uuid }
+  responses:
+    Unauthorized:
+      description: Sessão ausente, inválida ou expirada
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    Forbidden:
+      description: Papel ou tenant sem permissão para a operação
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    NotFound:
+      description: Recurso não encontrado neste escopo
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    SlotConflict:
+      description: Horário ficou indisponível ou conflita com outro agendamento
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    HasBookings:
+      description: Alteração conflita com agendamentos confirmados
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    InvalidTransition:
+      description: Transição de estado não permitida
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    ValidationFailure:
+      description: Entrada inválida
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    TooManyRequests:
+      description: Limite de tentativas atingido
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+      headers:
+        Retry-After:
+          schema: { type: integer, minimum: 1 }
