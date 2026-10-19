@@ -253,6 +253,14 @@ export class Telemetry {
     this.logger.log(level, event, context);
   }
 
+  logError(
+    event: string,
+    error: unknown,
+    context: Parameters<JsonLogger['logError']>[2] = {},
+  ): void {
+    this.logger.logError(event, error, context);
+  }
+
   async onModuleDestroy(): Promise<void> {
     await Promise.all([this.tracerProvider.shutdown(), this.meterProvider.shutdown()]);
   }

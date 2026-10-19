@@ -21,8 +21,8 @@
   "scripts": {
     "build": "nest build",
     "start:dev": "nest start --watch",
-    "start:prod": "node dist/main.js",
-    "worker": "node dist/worker.js",
+    "start:prod": "node --enable-source-maps dist/main.js",
+    "worker": "node --enable-source-maps dist/worker.js",
     "lint": "eslint . --max-warnings=0",
     "typecheck": "tsc --noEmit",
     "test:unit": "vitest run --config vitest.config.ts",

@@ -22,4 +22,4 @@ COPY --from=production-dependencies /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 USER app
 EXPOSE 3000
-CMD ["node", "dist/main.js"]
+CMD ["node", "--enable-source-maps", "dist/main.js"]

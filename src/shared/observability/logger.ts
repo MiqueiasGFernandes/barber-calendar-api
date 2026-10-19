@@ -4,6 +4,7 @@ import {
   type TelemetryOperation,
   type TelemetryOutcome,
 } from './metrics.js';
+import { errorDiagnostic } from './error-diagnostics.js';
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const traceIdPattern = /^[0-9a-f]{32}$/i;
@@ -21,6 +22,7 @@ const events = new Set([
   'application_start_failed',
   'outbox_poll_completed',
   'operation_completed',
+  'http_request_failed',
 ]);
 type SafeLogContext = Readonly<{
   correlation_id?: unknown;
@@ -32,6 +34,8 @@ type SafeLogContext = Readonly<{
   status_code?: unknown;
   duration_ms?: unknown;
   item_count?: unknown;
+  stage?: unknown;
+  component?: unknown;
 }>;
 
 export function redact(value: unknown): unknown {
@@ -56,6 +60,20 @@ export class JsonLogger {
   ) {}
 
   log(level: string, message: string, context: SafeLogContext = {}): void {
+    this.sink(`${JSON.stringify(this.record(level, message, context))}\n`);
+  }
+
+  logError(message: string, error: unknown, context: SafeLogContext = {}): void {
+    this.sink(
+      `${JSON.stringify({ ...this.record('error', message, context), error: errorDiagnostic(error) })}\n`,
+    );
+  }
+
+  private record(
+    level: string,
+    message: string,
+    context: SafeLogContext,
+  ): Record<string, string | number> {
     const safeLevel = level === 'error' || level === 'warn' ? level : 'info';
     const safeMessage = events.has(message) ? message : 'event';
     const record: Record<string, string | number> = {
@@ -84,6 +102,20 @@ export class JsonLogger {
       record.duration_ms = Math.max(0, context.duration_ms);
     if (typeof context.item_count === 'number' && Number.isInteger(context.item_count))
       record.item_count = Math.max(0, context.item_count);
-    this.sink(`${JSON.stringify(record)}\n`);
+    if (
+      typeof context.stage === 'string' &&
+      [
+        'configuration',
+        'initialization',
+        'http_setup',
+        'listening',
+        'request',
+        'worker_iteration',
+      ].includes(context.stage)
+    )
+      record.stage = context.stage;
+    if (context.component === 'api' || context.component === 'worker')
+      record.component = context.component;
+    return record;
   }
 }

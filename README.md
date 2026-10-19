@@ -297,6 +297,8 @@ Para executar `yarn test:unit` isoladamente, rode `yarn build` antes: os testes 
 
 O histograma `scheduling_request_duration_seconds` permite calcular p95 no coletor OTLP. Contadores `scheduling_conflict`, `scheduling_transition`, `scheduling_replay` e `scheduling_throttled` usam somente categorias fixas de operação/resultado. O diagnóstico local usa buckets fixos para estimar p95, sem reter amostras. Não há SLA de latência definido nem endpoint `/metrics` nesta API.
 
+Falhas de inicialização, erros HTTP 5xx e falhas propagadas no ciclo do worker geram diagnóstico JSON com etapa, stack trace e cadeia de causas sanitizadas. Variáveis inválidas são identificadas pelo nome; erros de schema informam revisões esperada/encontrada. As respostas HTTP não expõem stacks. Os comandos de produção e o container habilitam source maps para localizar a falha no TypeScript. Consulte o [guia de diagnóstico de erros](docs/error-diagnostics.md) para interpretar os campos, códigos e limites de privacidade.
+
 O Husky instala `.husky/pre-commit` durante `yarn install`. Antes de cada commit, o hook executa `yarn ci:check`, incluindo as suítes que dependem de Docker.
 
 ## Estrutura do projeto

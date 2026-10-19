@@ -9,6 +9,7 @@ import { configureCorrelation, correlationRequestId } from './shared/http/correl
 import { Telemetry } from './shared/observability/telemetry.js';
 import { JsonLogger } from './shared/observability/logger.js';
 
+let startupStage = 'configuration';
 async function bootstrap(): Promise<void> {
   const env = parseEnvironment(process.env),
     adapter = new FastifyAdapter({
@@ -19,16 +20,23 @@ async function bootstrap(): Promise<void> {
       requestIdHeader: false,
       genReqId: correlationRequestId,
     });
+  startupStage = 'initialization';
   const app = await NestFactory.create<NestFastifyApplication>(AppModule, adapter, {
     logger: false,
+    abortOnError: false,
   });
+  startupStage = 'http_setup';
   configureCorrelation(app, app.get(Telemetry));
   await app.register(helmet);
   app.useGlobalFilters(new ProblemDetailsFilter());
   app.enableShutdownHooks();
+  startupStage = 'listening';
   await app.listen(env.PORT, '0.0.0.0');
 }
-void bootstrap().catch(() => {
-  new JsonLogger().log('error', 'application_start_failed');
+void bootstrap().catch((error: unknown) => {
+  new JsonLogger().logError('application_start_failed', error, {
+    stage: startupStage,
+    component: 'api',
+  });
   process.exitCode = 1;
 });
