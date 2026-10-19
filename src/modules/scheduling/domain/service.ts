@@ -11,6 +11,7 @@ export class Service {
     if (!Number.isInteger(input.durationMinutes) || input.durationMinutes < 1 || input.durationMinutes > 480) throw new Error('invalid service duration');
     if (!Number.isInteger(input.priceMinor) || input.priceMinor < 0) throw new Error('invalid service price');
     if (!/^[A-Z]{3}$/.test(input.currency)) throw new Error('invalid currency');
+    if (input.status !== undefined && input.status !== 'active' && input.status !== 'inactive') throw new Error('invalid service status');
     if (input.description !== undefined) this.description = input.description;
     this.status = input.status ?? 'active';
   }

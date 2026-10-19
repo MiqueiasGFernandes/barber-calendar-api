@@ -4,6 +4,7 @@ export class ApplicationError extends Error {
     readonly code: string,
     message: string,
     readonly retryAfterSeconds?: number,
+    readonly conflictingAppointmentIds?: readonly string[],
   ) {
     super(message);
   }

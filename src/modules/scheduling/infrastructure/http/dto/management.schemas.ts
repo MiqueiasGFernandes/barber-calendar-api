@@ -1,0 +1,14 @@
+import { z } from 'zod';
+import { uuidSchema } from './common.schemas.js';
+const name=z.string().trim().min(1).max(120);const idArray=z.array(uuidSchema);
+export const settingsSchema=z.object({slot_interval_minutes:z.number().int().min(1),minimum_advance_minutes:z.number().int().min(0)}).strict();
+export const timeZoneSchema=z.object({time_zone:z.string().min(1).max(100)}).strict();
+export const serviceInputSchema=z.object({name,description:z.string().max(1000).optional(),duration_minutes:z.number().int().min(1).max(480),price_minor:z.number().int().min(0),currency_code:z.string().regex(/^[A-Z]{3}$/),professional_ids:idArray.min(1)}).strict();
+export const servicePatchSchema=z.object({name:name.optional(),description:z.string().max(1000).optional(),duration_minutes:z.number().int().min(1).max(480).optional(),price_minor:z.number().int().min(0).optional(),currency_code:z.string().regex(/^[A-Z]{3}$/).optional(),status:z.enum(['active','inactive']).optional(),professional_ids:idArray.optional()}).strict().refine(v=>Object.keys(v).length>0);
+export const professionalInputSchema=z.object({display_name:name}).strict();
+export const professionalPatchSchema=z.object({display_name:name.optional(),status:z.enum(['active','inactive']).optional()}).strict().refine(v=>Object.keys(v).length>0);
+export const weeklyPeriodSchema=z.object({iso_weekday:z.number().int().min(1).max(7),starts_local_time:z.string().regex(/^([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]$/),ends_local_time:z.string().regex(/^([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]$/)}).strict().refine(p=>p.starts_local_time<p.ends_local_time);
+export const periodsSchema=z.object({periods:z.array(weeklyPeriodSchema)}).strict();
+export const exceptionInputSchema=z.object({kind:z.enum(['break','time_off','holiday','blocked']),starts_at:z.iso.datetime({offset:true}),ends_at:z.iso.datetime({offset:true}),reason:z.string().max(240).optional()}).strict();
+export const exceptionQuerySchema=z.object({starts_from:z.iso.datetime({offset:true}),ends_before:z.iso.datetime({offset:true})}).strict();
+export {uuidSchema};

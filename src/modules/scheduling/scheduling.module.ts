@@ -23,6 +23,11 @@ import { PublicBookingRateLimitGuard } from './infrastructure/http/public-bookin
 import { AppointmentRepository } from './infrastructure/persistence/appointment.repository.js';
 import { CreateGuestAppointmentUseCase } from './application/use-cases/create-guest-appointment.use-case.js';
 import { CREATE_GUEST_APPOINTMENT, PublicAppointmentsController } from './infrastructure/http/public-appointments.controller.js';
+import { ManageConfigurationUseCases } from './application/use-cases/manage-configuration.use-cases.js';
+import { MANAGE_CONFIGURATION, ManagementController } from './infrastructure/http/management.controller.js';
+import { TenantSessionGuard } from '../authentication/infrastructure/http/tenant-session.guard.js';
+import { ConfigurationConflictRepository } from './infrastructure/persistence/configuration-conflict.repository.js';
+import { ConfigurationConflictService } from './application/services/configuration-conflict.service.js';
 
 export const SCHEDULING_TRANSACTION = Symbol('SCHEDULING_TRANSACTION');
 export const IDEMPOTENCY_CIPHER = Symbol('IDEMPOTENCY_CIPHER');
@@ -32,9 +37,10 @@ export const TIME_ZONE_CONVERTER = Symbol('TIME_ZONE_CONVERTER');
 
 @Module({
   imports: [AuthenticationModule],
-  controllers: [PublicCatalogController, PublicAppointmentsController],
+  controllers: [PublicCatalogController, PublicAppointmentsController, ManagementController],
   providers: [
     AdministratorGuard,
+    TenantSessionGuard,
     SchedulingExceptionFilter,
     PublicBookingRateLimitGuard,
     { provide: SCHEDULING_CLOCK, useClass: SystemClock },
@@ -48,6 +54,9 @@ export const TIME_ZONE_CONVERTER = Symbol('TIME_ZONE_CONVERTER');
     { provide: PublicCatalogRepository, inject: [DATABASE], useFactory: (db:PostgresPool) => new PublicCatalogRepository(db) },
     { provide: AvailabilityRepository, inject: [DATABASE,TIME_ZONE_CONVERTER], useFactory: (db:PostgresPool,zones:IanaTimeZoneAdapter) => new AvailabilityRepository(db,zones) },
     AppointmentRepository,
+    { provide: ConfigurationConflictRepository, useFactory: () => new ConfigurationConflictRepository() },
+    { provide: ConfigurationConflictService, inject: [ConfigurationConflictRepository], useFactory: (repository:ConfigurationConflictRepository) => new ConfigurationConflictService(repository) },
+    { provide: MANAGE_CONFIGURATION, inject: [DATABASE, IdempotentMutationService,TIME_ZONE_CONVERTER,ConfigurationConflictService], useFactory: (db:PostgresPool,mutations:IdempotentMutationService,zones:IanaTimeZoneAdapter,conflicts:ConfigurationConflictService) => new ManageConfigurationUseCases(db,mutations,zones,conflicts) },
     { provide: CREATE_GUEST_APPOINTMENT, inject: [PublicCatalogRepository,AvailabilityRepository,TIME_ZONE_CONVERTER,IdempotentMutationService,AppointmentRepository,AppointmentEventRepository], useFactory: (catalog:PublicCatalogRepository,availability:AvailabilityRepository,zones:IanaTimeZoneAdapter,idempotency:IdempotentMutationService,appointments:AppointmentRepository,events:AppointmentEventRepository) => new CreateGuestAppointmentUseCase(catalog,availability,zones,idempotency,appointments,events) },
     { provide: LIST_PUBLIC_SERVICES, inject: [PublicCatalogRepository], useFactory: (catalog:PublicCatalogRepository) => new ListPublicServicesUseCase(catalog) },
     { provide: GET_PUBLIC_AVAILABILITY, inject: [PublicCatalogRepository,AvailabilityRepository,TIME_ZONE_CONVERTER,SCHEDULING_CLOCK], useFactory: (catalog:PublicCatalogRepository,availability:AvailabilityRepository,zones:IanaTimeZoneAdapter,clock:SystemClock) => new GetPublicAvailabilityUseCase(catalog,availability,zones,clock) },

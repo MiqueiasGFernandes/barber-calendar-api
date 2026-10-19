@@ -15,8 +15,9 @@ export class SchedulingExceptionFilter implements ExceptionFilter {
       new ApplicationError(500, 'internal_error', 'Unexpected failure');
     if (error.retryAfterSeconds !== undefined) response.header('Retry-After',String(error.retryAfterSeconds));
     void response.status(error.status).type('application/problem+json').send({
-      type: `https://barber-calendar.local/problems/${error.code}`, title: error.message,
-      status: error.status, code: error.code, correlation_id: request.id,
+      type: error.conflictingAppointmentIds ? 'urn:problem:confirmed-bookings-conflict' : `https://barber-calendar.local/problems/${error.code}`, title: error.message,
+      status: error.status, detail: error.message, correlation_id: request.id,
+      ...(error.conflictingAppointmentIds ? { conflicting_appointment_ids: error.conflictingAppointmentIds } : {}),
     });
   }
 }

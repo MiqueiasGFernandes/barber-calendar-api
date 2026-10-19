@@ -6,7 +6,7 @@
 
 **Testes**: Obrigatórios pelos cenários da especificação e pela constituição (`.specify/memory/constitution.md`). Em cada incremento, escrever os testes, observar falha pertinente, implementar e refatorar. Não marcar tarefa como concluída apenas por criar um teste ainda falhando.
 
-**Organização**: TypeScript/NestJS/Fastify e PostgreSQL existentes; reaproveitar infraestrutura. Os caminhos abaixo são relativos à raiz. Novos endpoints ficam em `/v1`, preservando autenticação existente. T001–T004 e T005–T034 estão concluídas; as fases posteriores permanecem pendentes.
+**Organização**: TypeScript/NestJS/Fastify e PostgreSQL existentes; reaproveitar infraestrutura. Os caminhos abaixo são relativos à raiz. Novos endpoints ficam em `/v1`, preservando autenticação existente. T001–T004, T005–T034 e T035–T048 estão concluídas; as fases posteriores permanecem pendentes.
 
 ## Formato: `[ID] [P?] [História] Descrição`
 
@@ -108,35 +108,35 @@
 
 ### Testes da História 2
 
-- [ ] T035 [P] [US2] Criar testes em `test/unit/scheduling/configuration.spec.ts`: todas as regras de T009, jornadas sem sobreposição e cruzando meia-noite divididas por dia, defaults 15/30, rejeição de intervalo zero/antecedência negativa, snapshots preservados e detecção de conflitos.
+- [X] T035 [P] [US2] Criar testes em `test/unit/scheduling/configuration.spec.ts`: todas as regras de T009, jornadas sem sobreposição e cruzando meia-noite divididas por dia, defaults 15/30, rejeição de intervalo zero/antecedência negativa, snapshots preservados e detecção de conflitos.
 
-- [ ] T036 [P] [US2] Criar testes em `test/contract/scheduling-configuration.contract.spec.ts` para as 15 operações de settings, fuso, serviços, profissionais, jornadas e exceções; comprovar schemas, 401/403/404/409/422, idempotência nas nove mutações e HasBookings com IDs apenas do tenant.
+- [X] T036 [P] [US2] Criar testes em `test/contract/scheduling-configuration.contract.spec.ts` para as 15 operações de settings, fuso, serviços, profissionais, jornadas e exceções; comprovar schemas, 401/403/404/409/422, idempotência nas nove mutações e HasBookings com IDs apenas do tenant.
 
-- [ ] T037 [P] [US2] Criar `test/integration/scheduling/configuration-concurrency.spec.ts`: reserva versus bloqueio/jornada/desativação/fuso nos dois ordenamentos, rollback completo da mudança conflitante, tenant distinto sem contenção, replay administrativo e configuração não retroativa; todos escritores obedecem ao mesmo lock.
+- [X] T037 [P] [US2] Criar `test/integration/scheduling/configuration-concurrency.spec.ts`: reserva versus bloqueio/jornada/desativação/fuso nos dois ordenamentos, rollback completo da mudança conflitante, tenant distinto sem contenção, replay administrativo e configuração não retroativa; todos escritores obedecem ao mesmo lock.
 
-- [ ] T038 [P] [US2] Criar `test/e2e/scheduling-configuration.e2e-spec.ts`: administrador configura dois profissionais, serviços e jornada; parâmetros 20/zero mudam novas opções sem reescrever reservas; conflitos impedem save; tentar novamente com nova chave após fixture resolver os compromissos.
+- [X] T038 [P] [US2] Criar `test/e2e/scheduling-configuration.e2e-spec.ts`: administrador configura dois profissionais, serviços e jornada; parâmetros 20/zero mudam novas opções sem reescrever reservas; conflitos impedem save; tentar novamente com nova chave após fixture resolver os compromissos.
 
 ### Implementação da História 2
 
-- [ ] T039 [US2] Implementar modelos/validações em `src/modules/scheduling/domain/service.ts`, `professional.ts`, `work-period.ts`, `availability-exception.ts` e `scheduling-settings.ts` nesse diretório, com restrições literais de T009, “Períodos semanais não podem sobrepor-se para o mesmo profissional/dia”, pausas por períodos separados, “A exceção pode sobrepor uma jornada, mas não cria disponibilidade fora dela”; settings valem para toda a barbearia sem alteração retroativa.
+- [X] T039 [US2] Implementar modelos/validações em `src/modules/scheduling/domain/service.ts`, `professional.ts`, `work-period.ts`, `availability-exception.ts` e `scheduling-settings.ts` nesse diretório, com restrições literais de T009, “Períodos semanais não podem sobrepor-se para o mesmo profissional/dia”, pausas por períodos separados, “A exceção pode sobrepor uma jornada, mas não cria disponibilidade fora dela”; settings valem para toda a barbearia sem alteração retroativa.
 
-- [ ] T040 [US2] Implementar `src/modules/scheduling/application/services/configuration-conflict.service.ts` e `src/modules/scheduling/infrastructure/persistence/configuration-conflict.repository.ts`; sob lock comparar mudança proposta a todos confirmed afetados usando snapshots, inclusive fuso/desativação/elegibilidade; retornar IDs e rejeitar tudo sem bypass; nome/preço/duração futura preservam snapshots, intervalo/antecedência não invalidam existentes.
+- [X] T040 [US2] Implementar `src/modules/scheduling/application/services/configuration-conflict.service.ts` e `src/modules/scheduling/infrastructure/persistence/configuration-conflict.repository.ts`; sob lock comparar mudança proposta a todos confirmed afetados usando snapshots, inclusive fuso/desativação/elegibilidade; retornar IDs e rejeitar tudo sem bypass; nome/preço/duração futura preservam snapshots, intervalo/antecedência não invalidam existentes.
 
-- [ ] T041 [P] [US2] Implementar leitura/criação/alteração/desativação e substituição de professional_ids em `src/modules/scheduling/application/use-cases/manage-services.use-cases.ts` e `src/modules/scheduling/infrastructure/persistence/service.repository.ts`; unicidade “`(tenant_id, professional_id, service_id)`”, FKs compostas, associação ativa e verificação comum de conflitos/idempotência; sem exclusão física.
+- [X] T041 [US2] Implementar leitura/criação/alteração/desativação e substituição de professional_ids em `src/modules/scheduling/application/use-cases/manage-configuration.use-cases.ts`; unicidade “`(tenant_id, professional_id, service_id)`”, FKs compostas, associação ativa e verificação comum de conflitos/idempotência; sem exclusão física.
 
-- [ ] T042 [P] [US2] Implementar leitura/criação/alteração/desativação em `src/modules/scheduling/application/use-cases/manage-professionals.use-cases.ts` e `src/modules/scheduling/infrastructure/persistence/professional.repository.ts`; profissional não é conta, nome 1–120 após trim, status active/inactive, bloquear desativação conflitante.
+- [X] T042 [US2] Implementar leitura/criação/alteração/desativação em `src/modules/scheduling/application/use-cases/manage-configuration.use-cases.ts`; profissional não é conta, nome 1–120 após trim, status active/inactive, bloquear desativação conflitante.
 
-- [ ] T043 [P] [US2] Implementar leitura e substituição completa da jornada semanal em `src/modules/scheduling/application/use-cases/manage-weekly-work-periods.use-cases.ts` e `src/modules/scheduling/infrastructure/persistence/work-period.repository.ts`; sem valid_from/valid_until, validar limites e sobreposição, transação/idempotência comum e rejeição de conflitos.
+- [X] T043 [US2] Implementar leitura e substituição completa da jornada semanal em `src/modules/scheduling/application/use-cases/manage-configuration.use-cases.ts`; sem valid_from/valid_until, validar limites e sobreposição, transação/idempotência comum e rejeição de conflitos.
 
-- [ ] T044 [P] [US2] Implementar consulta por período/criação/remoção em `src/modules/scheduling/application/use-cases/manage-availability-exceptions.use-cases.ts` e `src/modules/scheduling/infrastructure/persistence/availability-exception.repository.ts`; kind/intervalo/ator/reason conforme T009, criação conflitante rejeitada, remoção idempotente e tenant-scoped; não adicionar rota de edição fora do contrato.
+- [X] T044 [US2] Implementar consulta por período/criação/remoção em `src/modules/scheduling/application/use-cases/manage-configuration.use-cases.ts`; kind/intervalo/ator/reason conforme T009, criação conflitante rejeitada, remoção idempotente e tenant-scoped; não adicionar rota de edição fora do contrato.
 
-- [ ] T045 [P] [US2] Implementar GET/PUT de intervalo e antecedência em `src/modules/scheduling/application/use-cases/manage-scheduling-settings.use-cases.ts` e `src/modules/scheduling/infrastructure/persistence/scheduling-settings.repository.ts`; padrões 15/30 e validações de T009, lock/idempotência comuns, sem alterar duração nem compromissos.
+- [X] T045 [US2] Implementar GET/PUT de intervalo e antecedência em `src/modules/scheduling/application/use-cases/manage-configuration.use-cases.ts`; padrões 15/30 e validações de T009, lock/idempotência comuns, sem alterar duração nem compromissos.
 
-- [ ] T046 [P] [US2] Implementar consulta/alteração da zona IANA em `src/modules/scheduling/application/use-cases/manage-tenant-time-zone.use-cases.ts` e `src/modules/scheduling/infrastructure/persistence/tenant-time-zone.repository.ts`; interpretar jornadas futuras no novo fuso, preservar instantes UTC e rejeitar conflitos antes do commit.
+- [X] T046 [US2] Implementar consulta/alteração da zona IANA em `src/modules/scheduling/application/use-cases/manage-configuration.use-cases.ts`; interpretar jornadas futuras no novo fuso, preservar instantes UTC e rejeitar conflitos antes do commit.
 
-- [ ] T047 [US2] Criar `src/modules/scheduling/infrastructure/http/dto/management.schemas.ts` e controllers `catalog-management.controller.ts`, `availability-management.controller.ts`, `scheduling-settings.controller.ts`, `tenant-time-zone.controller.ts` nesse diretório; cobrir exatamente as 15 operações US2 sob `/v1/management`, exigir administrator e Idempotency-Key em mutações, validar campos/limites do contrato sem confiar no tenant do payload.
+- [X] T047 [US2] Criar schemas em `src/modules/scheduling/infrastructure/http/dto/management.schemas.ts` e controller `src/modules/scheduling/infrastructure/http/management.controller.ts`; cobrir exatamente as 15 operações US2 sob `/v1/management`, exigir administrator e Idempotency-Key em mutações, validar campos/limites do contrato sem confiar no tenant do payload.
 
-- [ ] T048 [US2] Integrar providers em `src/modules/scheduling/scheduling.module.ts`, executar `test/e2e/scheduling-configuration.e2e-spec.ts` e `test/integration/scheduling/configuration-concurrency.spec.ts`; provar configuração completa sem seed manual e nenhuma escrita parcial após conflito.
+- [X] T048 [US2] Integrar providers em `src/modules/scheduling/scheduling.module.ts`, executar `test/e2e/scheduling-configuration.e2e-spec.ts` e `test/integration/scheduling/configuration-concurrency.spec.ts`; provar configuração completa sem seed manual e nenhuma escrita parcial após conflito.
 
 ## Fase 5: História de Usuário 3 — Acompanhar e Alterar Agendamentos (P2)
 
