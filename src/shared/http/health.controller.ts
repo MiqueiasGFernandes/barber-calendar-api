@@ -11,7 +11,7 @@ export class HealthController {
     const result = await this.database.query<{ revision: string }>(
       `SELECT revision FROM app_meta.schema_build WHERE singleton`,
     );
-    if (result.rows[0]?.revision !== '001-tenant-authentication-v3')
+    if (result.rows[0]?.revision !== '002-appointment-scheduling-v1')
       throw new Error('unsupported schema');
     return { status: 'ready', schema_revision: result.rows[0].revision };
   }

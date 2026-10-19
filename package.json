@@ -4,6 +4,10 @@
   "private": true,
   "license": "UNLICENSED",
   "type": "module",
+  "imports": {
+    "#scheduling/*": "./dist/modules/scheduling/*",
+    "#audit/*": "./dist/modules/audit/*"
+  },
   "engines": {
     "node": ">=24.0.0 <25",
     "yarn": ">=4.18.0 <5"
@@ -25,7 +29,7 @@
     "test:integration": "vitest run --config vitest.integration.config.ts",
     "test:contract": "vitest run --config vitest.contract.config.ts",
     "test:e2e": "sh scripts/test-e2e.sh",
-    "contract:types": "yarn openapi-typescript specs/001-tenant-authentication/contracts/openapi.yaml -o src/shared/http/openapi-types.ts",
+    "contract:types": "yarn openapi-typescript specs/001-tenant-authentication/contracts/openapi.yaml -o src/shared/http/openapi-types.ts && yarn openapi-typescript specs/002-appointment-scheduling/contracts/openapi.yaml -o src/modules/scheduling/infrastructure/http/openapi-types.ts",
     "contract:check": "sh scripts/check-openapi.sh",
     "schema:check": "sh scripts/check-schema-drift.sh",
     "ci:check": "sh scripts/check-ci.sh",

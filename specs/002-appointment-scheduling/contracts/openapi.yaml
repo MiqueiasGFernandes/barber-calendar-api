@@ -2,7 +2,7 @@ openapi: 3.1.0
 info:
   title: API de Agendamento da Barber Calendar
   version: 1.0.0
-  description: Contrato de catálogo, disponibilidade e reservas por tenant.
+  description: Contrato de catálogo, disponibilidade e reservas por tenant. Toda rota de gestão exige sessão ativa com papel administrator; o tenant é derivado da sessão. Instantes retornados usam offset da zona IANA da barbearia.
 servers:
   - url: /v1
 paths:
@@ -25,11 +25,13 @@ paths:
                   services:
                     type: array
                     items: { $ref: '#/components/schemas/PublicService' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
         '404': { $ref: '#/components/responses/NotFound' }
 
   /public/tenants/{tenant_slug}/availability:
     get:
       operationId: getPublicAvailability
+      description: Inícios separados por slot_interval_minutes, ancorados no início de cada período de expediente. Exige serviço completo sem conflitos e início igual ou posterior ao instante da consulta mais minimum_advance_minutes; com zero, exige início estritamente futuro. A janela inclui hoje até 30 dias à frente no fuso local.
       summary: Consultar horários livres para serviço e data
       tags: [Disponibilidade Pública]
       parameters:
@@ -62,20 +64,19 @@ paths:
                   slots:
                     type: array
                     items: { $ref: '#/components/schemas/AvailableSlot' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
         '404': { $ref: '#/components/responses/NotFound' }
         '422': { $ref: '#/components/responses/ValidationFailure' }
 
   /public/tenants/{tenant_slug}/appointments:
     post:
       operationId: createGuestAppointment
+      description: Revalida atomicamente a grade ancorada em cada período de expediente, a janela de 30 dias, a elegibilidade e a disponibilidade integral. No instante da confirmação, exige início igual ou posterior ao instante atual mais minimum_advance_minutes; com zero, somente início estritamente futuro. Uma consulta anterior não garante reserva; rejeição não cria agendamento.
       summary: Reservar um horário sem criar conta
       tags: [Agendamentos Públicos]
       parameters:
         - $ref: '#/components/parameters/TenantSlug'
-        - name: Idempotency-Key
-          in: header
-          required: true
-          schema: { type: string, minLength: 16, maxLength: 128 }
+        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -91,6 +92,44 @@ paths:
         '409': { $ref: '#/components/responses/SlotConflict' }
         '422': { $ref: '#/components/responses/ValidationFailure' }
         '429': { $ref: '#/components/responses/TooManyRequests' }
+
+  /management/scheduling-settings:
+    get:
+      operationId: getSchedulingSettings
+      summary: Consultar intervalo entre inícios e antecedência mínima da barbearia
+      tags: [Gestão]
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Configuração do tenant autenticado, incluindo os padrões quando não personalizada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SchedulingSettings' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    put:
+      operationId: updateSchedulingSettings
+      summary: Configurar intervalo entre inícios e antecedência mínima da barbearia
+      description: Aplica-se a todos os profissionais e serviços; não altera duração de serviços nem agendamentos existentes.
+      tags: [Gestão]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SchedulingSettings' }
+      responses:
+        '409': { $ref: '#/components/responses/IdempotencyConflict' }
+        '200':
+          description: Configuração atualizada atomicamente
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SchedulingSettings' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '422': { $ref: '#/components/responses/ValidationFailure' }
 
   /management/time-zone:
     get:
@@ -112,9 +151,12 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
     put:
       operationId: updateTenantTimeZone
+      description: Preserva os instantes dos agendamentos existentes. Rejeita atomicamente a mudança de fuso se a jornada reinterpretada conflitar com agendamentos confirmados, mantendo a configuração anterior.
       summary: Configurar o fuso horário local da barbearia
       tags: [Gestão]
       security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
@@ -126,6 +168,7 @@ paths:
               properties:
                 time_zone: { type: string, example: America/Sao_Paulo }
       responses:
+        '409': { $ref: '#/components/responses/HasBookings' }
         '204': { description: Fuso atualizado; agendamentos existentes não mudam de instante }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
@@ -156,12 +199,15 @@ paths:
       summary: Cadastrar serviço e profissionais aptos
       tags: [Gestão]
       security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
           application/json:
             schema: { $ref: '#/components/schemas/ServiceInput' }
       responses:
+        '409': { $ref: '#/components/responses/IdempotencyConflict' }
         '201':
           description: Serviço criado
           content:
@@ -174,10 +220,12 @@ paths:
   /management/services/{service_id}:
     patch:
       operationId: updateService
+      description: Mudanças conflitantes com agendamentos confirmados são rejeitadas atomicamente, preservando serviço e compromissos; exige resolução dos conflitos antes de nova tentativa.
       summary: Atualizar ou desativar serviço
       tags: [Gestão]
       security: [{ bearerAuth: [] }]
       parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
         - name: service_id
           in: path
           required: true
@@ -224,12 +272,15 @@ paths:
       summary: Cadastrar profissional
       tags: [Gestão]
       security: [{ bearerAuth: [] }]
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
       requestBody:
         required: true
         content:
           application/json:
             schema: { $ref: '#/components/schemas/ProfessionalInput' }
       responses:
+        '409': { $ref: '#/components/responses/IdempotencyConflict' }
         '201':
           description: Profissional criado
           content:
@@ -242,10 +293,12 @@ paths:
   /management/professionals/{professional_id}:
     patch:
       operationId: updateProfessional
+      description: Mudanças de capacidade conflitantes com agendamentos confirmados são rejeitadas atomicamente, preservando profissional e compromissos.
       summary: Atualizar ou desativar profissional
       tags: [Gestão]
       security: [{ bearerAuth: [] }]
       parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
         - name: professional_id
           in: path
           required: true
@@ -295,10 +348,12 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
     put:
       operationId: replaceWeeklyWorkPeriods
+      description: Rejeita atomicamente toda a substituição se conflitar com agendamentos confirmados, preservando a jornada anterior. O responsável deve cancelar ou reagendar os conflitos antes de nova tentativa.
       summary: Definir períodos semanais de trabalho do profissional
       tags: [Gestão]
       security: [{ bearerAuth: [] }]
       parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
         - name: professional_id
           in: path
           required: true
@@ -369,10 +424,12 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
     post:
       operationId: createAvailabilityException
+      description: Rejeita atomicamente o bloqueio se conflitar com agendamentos confirmados. O responsável deve cancelar ou reagendar os conflitos antes de nova tentativa.
       summary: Criar pausa, folga ou bloqueio pontual
       tags: [Gestão]
       security: [{ bearerAuth: [] }]
       parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
         - name: professional_id
           in: path
           required: true
@@ -401,6 +458,7 @@ paths:
       tags: [Gestão]
       security: [{ bearerAuth: [] }]
       parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
         - name: professional_id
           in: path
           required: true
@@ -410,6 +468,7 @@ paths:
           required: true
           schema: { type: string, format: uuid }
       responses:
+        '409': { $ref: '#/components/responses/IdempotencyConflict' }
         '204': { description: Exceção removida }
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
@@ -457,10 +516,12 @@ paths:
   /management/appointments/{appointment_id}/cancellation:
     post:
       operationId: cancelAppointment
+      description: Aceita somente agendamentos confirmed. cancelled, attended e no_show são finais e imutáveis; uma nova reserva exige outro agendamento. Repetição com a mesma chave idempotente reproduz a resposta original sem nova transição.
       summary: Cancelar agendamento e liberar o intervalo
       tags: [Gestão]
       security: [{ bearerAuth: [] }]
       parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
         - name: appointment_id
           in: path
           required: true
@@ -479,10 +540,12 @@ paths:
   /management/appointments/{appointment_id}/rescheduling:
     post:
       operationId: rescheduleAppointment
+      description: Aceita somente agendamentos confirmed. Revalida grade, janela, antecedência mínima no instante da confirmação e disponibilidade integral; com antecedência zero exige início futuro. Atualiza ambos os intervalos atomicamente; em qualquer rejeição preserva o intervalo original. Estados finais não podem ser reagendados.
       summary: Reagendar mantendo atualização atômica
       tags: [Gestão]
       security: [{ bearerAuth: [] }]
       parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
         - name: appointment_id
           in: path
           required: true
@@ -506,16 +569,18 @@ paths:
         '401': { $ref: '#/components/responses/Unauthorized' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
-        '409': { $ref: '#/components/responses/SlotConflict' }
+        '409': { $ref: '#/components/responses/ReschedulingConflict' }
         '422': { $ref: '#/components/responses/ValidationFailure' }
 
   /management/appointments/{appointment_id}/outcome:
     post:
       operationId: recordAppointmentOutcome
+      description: Exige instante atual igual ou posterior ao início agendado para no_show, ou ao término para attended; caso contrário retorna 409. Aceita somente agendamentos confirmed. cancelled, attended e no_show são finais e não permitem alteração posterior; a repetição idempotente apenas reproduz a resposta original.
       summary: Marcar atendimento concluído ou não comparecimento
       tags: [Gestão]
       security: [{ bearerAuth: [] }]
       parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
         - name: appointment_id
           in: path
           required: true
@@ -549,6 +614,18 @@ components:
       scheme: bearer
       bearerFormat: JWT
   parameters:
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      description: >-
+        Obrigatória em toda mutação. Chave opaca isolada por tenant, ator autenticado
+        (ou contexto público), operação e recurso alvo. Durante 24 horas, repetir a mesma
+        chave com o mesmo conteúdo reproduz status, cabeçalhos aplicativos e corpo da
+        resposta inicial sem repetir efeitos, inclusive sob concorrência. Conteúdo diferente
+        para a mesma chave retorna 409. Após expirar, uma nova operação passa por todas
+        as validações atuais. Replays administrativos exigem autenticação e autorização.
+      schema: { type: string, minLength: 16, maxLength: 128 }
     TenantSlug:
       name: tenant_slug
       in: path
@@ -559,9 +636,25 @@ components:
         minLength: 3
         maxLength: 80
   schemas:
+    SchedulingSettings:
+      type: object
+      additionalProperties: false
+      required: [slot_interval_minutes, minimum_advance_minutes]
+      properties:
+        slot_interval_minutes:
+          type: integer
+          minimum: 1
+          default: 15
+          description: Intervalo entre inícios, ancorado no início de cada período de expediente.
+        minimum_advance_minutes:
+          type: integer
+          minimum: 0
+          default: 30
+          description: Antecedência na consulta e na confirmação; zero permite somente inícios futuros.
     AppointmentStatus:
       type: string
       enum: [confirmed, cancelled, attended, no_show]
+      description: confirmed permite cancelamento e reagendamento; no_show é permitido desde o início agendado e attended desde o término; cancelled, attended e no_show são finais e imutáveis.
     PublicService:
       type: object
       additionalProperties: false
@@ -652,8 +745,8 @@ components:
       required: [iso_weekday, starts_local_time, ends_local_time]
       properties:
         iso_weekday: { type: integer, minimum: 1, maximum: 7 }
-        starts_local_time: { type: string, format: time }
-        ends_local_time: { type: string, format: time }
+        starts_local_time: { type: string, pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]$', example: '09:00:00' }
+        ends_local_time: { type: string, pattern: '^([01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]$', example: '18:00:00' }
     AvailabilityExceptionInput:
       type: object
       additionalProperties: false
@@ -723,6 +816,21 @@ components:
         guest_name: { type: string }
         guest_phone: { type: string }
         guest_email: { type: string, format: email }
+    BookingsConflictProblem:
+      type: object
+      additionalProperties: false
+      required: [type, title, status, correlation_id, conflicting_appointment_ids]
+      properties:
+        type: { type: string, const: 'urn:problem:confirmed-bookings-conflict' }
+        title: { type: string }
+        status: { type: integer, const: 409 }
+        detail: { type: string, description: Descrição sem dados pessoais dos convidados. }
+        correlation_id: { type: string, format: uuid }
+        conflicting_appointment_ids:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items: { type: string, format: uuid }
     Problem:
       type: object
       additionalProperties: false
@@ -750,17 +858,35 @@ components:
         application/problem+json:
           schema: { $ref: '#/components/schemas/Problem' }
     SlotConflict:
-      description: Horário ficou indisponível ou conflita com outro agendamento
+      description: Horário ficou indisponível ou conflita com outro agendamento, ou chave idempotente reutilizada com conteúdo diferente. Não expõe dados nem IDs de outros agendamentos; o cliente pode consultar disponibilidade novamente.
       content:
         application/problem+json:
           schema: { $ref: '#/components/schemas/Problem' }
     HasBookings:
-      description: Alteração conflita com agendamentos confirmados
+      description: >-
+        Alteração rejeitada atomicamente por conflito com agendamentos confirmados;
+        configuração anterior e compromissos preservados. Retorna conflicting_appointment_ids
+        somente do tenant autorizado, sem dados pessoais dos convidados. Uma nova tentativa
+        exige cancelar ou reagendar os conflitos. Também cobre reutilização da chave
+        idempotente com conteúdo diferente, sem lista de agendamentos nesse caso.
+      content:
+        application/problem+json:
+          schema:
+            oneOf:
+              - $ref: '#/components/schemas/BookingsConflictProblem'
+              - $ref: '#/components/schemas/Problem'
+    IdempotencyConflict:
+      description: Chave idempotente reutilizada com conteúdo diferente
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
+    ReschedulingConflict:
+      description: Horário indisponível, estado diferente de confirmed ou chave idempotente reutilizada com conteúdo diferente; intervalo original preservado
       content:
         application/problem+json:
           schema: { $ref: '#/components/schemas/Problem' }
     InvalidTransition:
-      description: Transição de estado não permitida
+      description: Transição de estado não permitida (inclui qualquer alteração de estado final), ou chave idempotente reutilizada com conteúdo diferente
       content:
         application/problem+json:
           schema: { $ref: '#/components/schemas/Problem' }

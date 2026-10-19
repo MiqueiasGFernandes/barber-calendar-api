@@ -28,7 +28,7 @@ const testNow = new Date(Date.now() + 86_400_000);
 export const clock = { now: () => new Date(testNow) };
 export async function resetDatabase(): Promise<void> {
   await pool.query(
-    `DELETE FROM audit.security_events;DELETE FROM identity.email_outbox;DELETE FROM identity.authenticated_sessions;DELETE FROM identity.otp_challenges;DELETE FROM identity.registration_attempts;DELETE FROM identity.throttle_events;DELETE FROM identity.throttle_subjects;DELETE FROM tenancy.tenant_memberships;DELETE FROM identity.user_accounts;DELETE FROM tenancy.tenants;`,
+    `DELETE FROM audit.security_events;DELETE FROM scheduling.tenant_settings;DELETE FROM identity.email_outbox;DELETE FROM identity.authenticated_sessions;DELETE FROM identity.otp_challenges;DELETE FROM identity.registration_attempts;DELETE FROM identity.throttle_events;DELETE FROM identity.throttle_subjects;DELETE FROM tenancy.tenant_memberships;DELETE FROM identity.user_accounts;DELETE FROM tenancy.tenants;`,
   );
 }
 export async function closeDatabase(): Promise<void> {

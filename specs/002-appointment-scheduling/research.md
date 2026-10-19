@@ -4,7 +4,7 @@
 
 ### A reserva é um intervalo, não uma linha de horário pré-criada
 
-**Decisão**: Persistir instantes de início e fim por agendamento; calcular horários candidatos sob demanda a partir da jornada local, duração do serviço, exceções e reservas existentes. Gerar candidatos em incrementos de 15 minutos, mas nunca permitir que o serviço ultrapasse a jornada ou conflite com outra reserva.
+**Decisão**: Persistir instantes de início e fim por agendamento; calcular horários candidatos sob demanda a partir da jornada local, duração do serviço, exceções e reservas existentes. Gerar candidatos pelo `slot_interval_minutes` da barbearia (inteiro positivo, padrão 15), ancorados no início de cada período local de expediente, mas nunca permitir que o serviço ultrapasse a jornada ou conflite com outra reserva.
 
 **Motivo**: A duração varia por serviço. Uma grade persistida uniforme não representa adequadamente serviços de durações diferentes, pausas ou exceções. O intervalo semiaberto `[início, fim)` permite que um atendimento comece exatamente quando outro termina.
 
@@ -18,7 +18,7 @@ Quando o cliente aceita qualquer profissional, escolher entre os elegíveis pelo
 
 **Motivo**: Uma leitura de disponibilidade seguida de inserção não basta: solicitações concorrentes podem observar o mesmo espaço livre. A constraint protege o invariante no banco mesmo quando há mais de um processo da API. A aplicação ainda valida jornada, pausas, capacidade e estado, que a constraint de sobreposição não representa.
 
-**Alternativas consideradas**: Serializar todas as reservas por lock de profissional e então procurar conflitos; rejeitada como única proteção porque exige que todo caminho de escrita obedeça ao mesmo protocolo. Usar `SERIALIZABLE` para todas as transações; rejeitada por impor retentativas e custo a operações sem necessidade. A constraint é complementar à transação normal já existente.
+**Alternativas consideradas**: Usar apenas locks de aplicação; rejeitada como única proteção porque a constraint também deve impedir sobreposição em escritas diretas. Usar `SERIALIZABLE` para todas as transações; rejeitada por impor retentativas e custo a operações sem necessidade. A constraint é complementar à transação normal já existente.
 
 **Fontes primárias**: [Tipos de intervalo e constraints de exclusão do PostgreSQL](https://www.postgresql.org/docs/18/rangetypes.html), [constraints SQL](https://www.postgresql.org/docs/18/ddl-constraints.html), [extensão `btree_gist`](https://www.postgresql.org/docs/18/btree-gist.html).
 
@@ -68,12 +68,50 @@ Quando o cliente aceita qualquer profissional, escolher entre os elegíveis pelo
 
 ### Idempotência, eventos e limites
 
-**Decisão**: Exigir `Idempotency-Key` no `POST` público de reserva, guardar hash/resultado associado ao tenant por período limitado de 24 horas e rejeitar reutilização da mesma chave com corpo diferente. Guardar a idempotência em tabela própria, com índice único por tenant e hash; um job/limpeza transacional remove chaves expiradas antes de novas operações. Registrar eventos de criação, reagendamento, cancelamento, atendimento e não comparecimento sem nome, telefone ou e-mail em logs. Aplicar rate limit de segurança ao booking público usando os controles do gateway/servidor existentes; se inexistentes, iniciar com limite por IP sem persistir IP bruto.
+**Decisão**: Exigir `Idempotency-Key` em todas as mutações do contrato de scheduling, públicas e administrativas. O escopo é tenant + ator (membership ou público) + operação + recurso + hash da chave; persistir hash canônico da requisição, status HTTP e resposta original por 24 horas, atomicamente com a alteração. Repetição idêntica retorna a resposta original, mesmo após mudança de estado; corpo diferente retorna 409. A autenticação administrativa é revalidada antes do replay. Não registrar chave bruta ou contatos em logs. Respostas administrativas persistidas com PII exigem criptografia autenticada e retenção limitada; criar porta própria para o resultado idempotente e seguir o padrão AES-GCM do adapter de outbox, com chave e finalidade separadas (a porta de outbox é específica para e-mail).
 
-**Motivo**: Repetições por timeout não devem criar duas reservas. Convidados tornam a criação pública, portanto precisa de proteção básica contra abuso. O prazo de 24 horas é uma decisão técnica de deduplicação, não prazo de retenção do agendamento.
+**Motivo**: A constituição exige idempotência também em reagendamentos e alterações de configuração, não apenas na criação pública. Retornar o estado corrente não reproduziria a resposta original e poderia duplicar eventos.
+
+**Alternativas consideradas**: Deduplicar somente reservas; rejeitada por permitir replay de comandos administrativos obsoletos. Guardar somente o ID do agendamento; rejeitada porque o recurso pode ter sido alterado entre tentativas.
+
+**Decisão de proteção pública**: Usar contador PostgreSQL por tenant + hash HMAC do IP, com janela de 60 segundos: 120 leituras públicas e 10 tentativas de reserva, incluindo replay. Responder 429 com `Retry-After`; contadores expiram após duas janelas. Confiar em cabeçalhos de proxy somente nos CIDRs configurados. Os valores são parâmetros operacionais iniciais, não requisitos de produto. Evitar dependência de um gateway ainda inexistente.
+
+### Configuração e reservas compartilham a mesma fronteira transacional
+
+**Decisão**: Criar uma linha `scheduling.settings` por tenant, inclusive para tenants existentes no release. Toda mutação de agenda adquire `SELECT ... FOR UPDATE` nessa linha antes de ler configurações, catálogo, jornadas ou compromissos; depois bloqueia os agendamentos afetados em ordem de UUID. Em `READ COMMITTED`, carregar os dados relevantes após adquirir o lock. Todas as operações usam a mesma conexão/transação. GiST continua como proteção adicional.
+
+**Motivo**: A constraint de intervalos não protege uma reserva de uma pausa criada simultaneamente. Serializar escritas por barbearia torna a validação de FR-014 atômica sem impedir leituras nem bloquear outras barbearias.
+
+**Alternativas consideradas**: Locks somente por profissional exigem protocolo adicional para serviços compartilhados e mudanças de fuso; `SERIALIZABLE` exige retentativas completas. O lock por tenant reduz paralelismo de escrita da mesma barbearia, um compromisso explícito do MVP a medir antes de otimizar.
+
+**Fonte primária**: [Locks explícitos do PostgreSQL](https://www.postgresql.org/docs/18/explicit-locking.html).
+
+Mudanças de jornada, novos bloqueios, desativação, remoção de elegibilidade ou mudança de fuso que invalidem compromissos confirmados retornam 409 com IDs dos afetados, somente ao administrador do tenant; nada é persistido. Nome, preço e duração corrente de serviço não reescrevem snapshots anteriores. Alterar intervalo/antecedência afeta novas reservas, sem invalidar compromissos existentes. Não existe confirmação que ignore conflitos.
+
+### Antecedência e estados finais
+
+**Decisão**: `minimum_advance_minutes` é inteiro não negativo, padrão 30. Capturar o instante atual após adquirir o lock de escrita e revalidar início >= agora + antecedência; com zero, início estritamente futuro. Reagendamento usa as mesmas políticas, o mesmo serviço/profissional e os snapshots originais. A consulta é indicativa; confirmar pode retornar 409 se o tempo decorrido tornar o horário inelegível.
+
+**Motivo**: Implementa FR-020 a FR-022 sem aceitar um horário vencido entre busca e confirmação.
+
+**Alternativas consideradas**: Validar apenas na busca; rejeitada por corrida temporal. Aplicar novas políticas retroativamente; rejeitada pela preservação dos compromissos.
+
+**Decisão**: Somente `confirmed` permite cancelamento, reagendamento ou registro de resultado. `cancelled`, `attended` e `no_show` são terminais; novas alterações retornam 409. Replay da mesma chave é leitura da resposta armazenada, sem nova transição. `no_show` exige `agora >= starts_at`; `attended` exige `agora >= ends_at`. Ambos ocorrem após o intervalo ter começado, e atendimento só se conclui depois do horário. Cancelamento pode ocorrer antes do início. Eventos guardam estado anterior/novo, ator, tenant e instante.
+
+**Motivo**: Preserva histórico e garante transições determinísticas. A restrição temporal é uma decisão de implementação conservadora para impedir marcar serviços futuros como realizados.
+
+**Alternativas consideradas**: Reabrir estados finais; descartada pela clarificação explícita. Permitir resultado antes do fim; descartada por liberar um intervalo ainda em andamento.
+
+### Conversão de horário civil
+
+**Decisão**: Gerar candidatos locais e resolver a zona IANA no adapter de tempo; horários inexistentes em transições civis não são oferecidos, horários repetidos geram dois instantes distintos com offsets explícitos. Duração representa minutos decorridos. Testar lacunas, repetições, meia-noite e janela inclusiva hoje..hoje+30. Usar funcionalidades de zona do PostgreSQL/Intl atrás da porta e verificar os offsets candidatos por conversão de ida e volta, sem aceitar silenciosamente normalização de horário inexistente.
+
+**Motivo**: O nome da zona e o offset do instante são informações distintas. A regra evita ambiguidade mesmo fora do fuso inicial brasileiro.
+
+**Alternativas consideradas**: Fixar offset ou escolher implicitamente um dos horários repetidos; rejeitadas por perder disponibilidade ou reservar um instante diferente.
 
 ## Limites conhecidos e riscos residuais
 
 - Não há volume real, SLO de latência ou política de retenção de histórico no requisito. Não particionar nem expurgar dados de agendamento automaticamente nesta entrega; medir e aprovar política antes de operar em escala maior.
-- Constraint GiST protege intervalos por profissional, mas horários de expediente e exceções são regras de domínio e devem ser validados no mesmo fluxo de criação e reagendamento.
+- Constraint GiST protege intervalos por profissional, mas horários de expediente e exceções são regras de domínio e são validados após o lock compartilhado por todas as mutações do tenant.
 - Alteração de timezone afeta a interpretação futura de jornadas recorrentes; compromissos já confirmados permanecem instantes UTC imutáveis.

@@ -8,6 +8,7 @@ const base = {
   OTP_HMAC_KEY: 'o'.repeat(32),
   THROTTLE_HMAC_KEY: 't'.repeat(32),
   OUTBOX_ENCRYPTION_KEY: Buffer.alloc(32).toString('base64'),
+  IDEMPOTENCY_ENCRYPTION_KEY: Buffer.alloc(32, 1).toString('base64'),
   JWT_PRIVATE_KEY: 'private',
   JWT_PUBLIC_KEY: 'public',
   JWT_KEY_ID: 'kid',
@@ -16,6 +17,9 @@ const base = {
 };
 describe('environment', () => {
   it('uses 24 hours by default', () => expect(parseEnvironment(base).AUTH_SESSION_TTL).toBe(86400));
+  it('rejects an invalid idempotency encryption key', () => {
+    expect(() => parseEnvironment({ ...base, IDEMPOTENCY_ENCRYPTION_KEY: Buffer.alloc(31).toString('base64') })).toThrow();
+  });
   it.each([
     ['PT15M', 900],
     ['P7D', 604800],

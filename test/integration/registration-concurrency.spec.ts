@@ -60,9 +60,9 @@ describe.runIf(Boolean(process.env.DATABASE_URL))('registration concurrency', ()
     );
     expect(outcomes.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
     const definitive = await pool.query(
-      `SELECT (SELECT count(*) FROM tenancy.tenants)::int tenants,(SELECT count(*) FROM identity.user_accounts)::int accounts,(SELECT count(*) FROM tenancy.tenant_memberships)::int memberships,(SELECT count(*) FROM identity.authenticated_sessions)::int sessions`,
+      `SELECT (SELECT count(*) FROM tenancy.tenants)::int tenants,(SELECT count(*) FROM identity.user_accounts)::int accounts,(SELECT count(*) FROM tenancy.tenant_memberships)::int memberships,(SELECT count(*) FROM identity.authenticated_sessions)::int sessions,(SELECT count(*) FROM scheduling.tenant_settings)::int settings`,
     );
-    expect(definitive.rows[0]).toEqual({ tenants: 1, accounts: 1, memberships: 1, sessions: 1 });
+    expect(definitive.rows[0]).toEqual({ tenants: 1, accounts: 1, memberships: 1, sessions: 1, settings: 1 });
     expect(outcomes.filter((result) => result.status === 'rejected')).toHaveLength(19);
   });
   afterAll(closeDatabase);

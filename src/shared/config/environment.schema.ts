@@ -47,6 +47,7 @@ export const environmentSchema = z.object({
   OTP_HMAC_KEY: z.string().min(32),
   THROTTLE_HMAC_KEY: z.string().min(32),
   OUTBOX_ENCRYPTION_KEY: base64Key,
+  IDEMPOTENCY_ENCRYPTION_KEY: base64Key,
   JWT_PRIVATE_KEY: z.string().min(1),
   JWT_PUBLIC_KEY: z.string().min(1),
   JWT_KEY_ID: z.string().min(1),

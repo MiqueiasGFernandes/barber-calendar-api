@@ -15,6 +15,12 @@
     "sourceMap": true,
     "outDir": "dist",
     "rootDir": ".",
+    "baseUrl": ".",
+    "ignoreDeprecations": "6.0",
+    "paths": {
+      "#scheduling/*": ["src/modules/scheduling/*"],
+      "#audit/*": ["src/modules/audit/*"]
+    },
     "skipLibCheck": true,
     "types": ["node"]
   },

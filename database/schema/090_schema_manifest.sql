@@ -1,2 +1,3 @@
-INSERT INTO app_meta.schema_build(singleton,revision) VALUES (true,'001-tenant-authentication-v3');
+INSERT INTO scheduling.tenant_settings(tenant_id) SELECT id FROM tenancy.tenants ON CONFLICT DO NOTHING;
+INSERT INTO app_meta.schema_build(singleton,revision) VALUES (true,'002-appointment-scheduling-v1');
 

@@ -5,7 +5,7 @@ describe.runIf(enabled)('database bootstrap', () => {
   const pool = new Pool({ connectionString: process.env.DATABASE_URL });
   it('materializes the supported schema revision and all canonical relations', async () => {
     const revision = await pool.query(`SELECT revision FROM app_meta.schema_build WHERE singleton`);
-    expect(revision.rows[0]?.revision).toBe('001-tenant-authentication-v3');
+    expect(revision.rows[0]?.revision).toBe('002-appointment-scheduling-v1');
     for (const relation of [
       'tenancy.tenants',
       'identity.user_accounts',
@@ -17,6 +17,11 @@ describe.runIf(enabled)('database bootstrap', () => {
       'audit.security_events',
       'identity.throttle_subjects',
       'identity.throttle_events',
+      'scheduling.tenant_settings',
+      'scheduling.services',
+      'scheduling.professionals',
+      'scheduling.appointments',
+      'scheduling.appointment_events',
     ]) {
       const result = await pool.query('SELECT to_regclass($1) AS name', [relation]);
       expect(result.rows[0]?.name).toBe(relation);
@@ -33,6 +38,13 @@ describe.runIf(enabled)('database bootstrap', () => {
       database_create: false,
       can_insert: true,
     });
+  });
+  it('grants append-only event access and no DDL to the runtime role', async () => {
+    const result = await pool.query(`SELECT has_schema_privilege(current_user,'scheduling','CREATE') AS schema_create,
+      has_table_privilege(current_user,'scheduling.appointment_events','INSERT') AS can_insert,
+      has_table_privilege(current_user,'scheduling.appointment_events','UPDATE') AS can_update,
+      has_table_privilege(current_user,'scheduling.appointment_events','DELETE') AS can_delete`);
+    expect(result.rows[0]).toEqual({ schema_create: false, can_insert: true, can_update: false, can_delete: false });
   });
   afterAll(() => pool.end());
 });

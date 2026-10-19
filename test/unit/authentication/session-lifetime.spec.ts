@@ -5,6 +5,7 @@ const environment = {
   OTP_HMAC_KEY: 'o'.repeat(32),
   THROTTLE_HMAC_KEY: 't'.repeat(32),
   OUTBOX_ENCRYPTION_KEY: Buffer.alloc(32).toString('base64'),
+  IDEMPOTENCY_ENCRYPTION_KEY: Buffer.alloc(32, 1).toString('base64'),
   JWT_PRIVATE_KEY: 'x',
   JWT_PUBLIC_KEY: 'x',
   JWT_KEY_ID: 'x',

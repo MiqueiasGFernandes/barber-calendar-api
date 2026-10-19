@@ -13,4 +13,5 @@ cleanup() { docker compose -p "$project" -f compose.e2e.yaml down -v --remove-or
 trap cleanup EXIT INT TERM
 cleanup
 docker compose -p "$project" -f compose.e2e.yaml up -d --wait
+DATABASE_URL="postgres://barber_runtime:${BARBER_RUNTIME_PASSWORD}@localhost:${E2E_DB_PORT:-55432}/barber_calendar_e2e" yarn test:integration
 DATABASE_URL="postgres://barber_runtime:${BARBER_RUNTIME_PASSWORD}@localhost:${E2E_DB_PORT:-55432}/barber_calendar_e2e" yarn vitest run --config vitest.e2e.config.ts --no-file-parallelism

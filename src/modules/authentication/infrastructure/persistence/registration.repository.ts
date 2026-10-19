@@ -290,6 +290,7 @@ export class RegistrationRepository implements AuthenticationRepository {
       `INSERT INTO tenancy.tenants(id,name,slug,status,created_at,updated_at) VALUES ($1,$2,$3,'active',$4,$4)`,
       [ids.tenantId, row.tenant_name, row.tenant_slug, now],
     );
+    await client.query('INSERT INTO scheduling.tenant_settings(tenant_id) VALUES ($1)', [ids.tenantId]);
     await client.query(
       `INSERT INTO identity.user_accounts(id,email,normalized_email,email_verified_at,status,created_at,updated_at) VALUES ($1,$2,$3,$4,'active',$4,$4)`,
       [ids.userId, row.administrator_email, row.normalized_email, now],

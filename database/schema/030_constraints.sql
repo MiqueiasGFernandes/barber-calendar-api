@@ -62,3 +62,46 @@ ALTER TABLE identity.throttle_events
   ADD CONSTRAINT throttle_subject_fk FOREIGN KEY (subject_id) REFERENCES identity.throttle_subjects(id) ON DELETE CASCADE,
   ADD CONSTRAINT throttle_action_check CHECK (action IN ('registration','otp_issue','otp_verify_failure'));
 
+ALTER TABLE scheduling.tenant_settings ADD CONSTRAINT tenant_settings_time_zone_check CHECK (length(time_zone) BETWEEN 1 AND 64);
+ALTER TABLE scheduling.services
+  ADD CONSTRAINT services_name_check CHECK (name=btrim(name) AND length(name) BETWEEN 1 AND 120),
+  ADD CONSTRAINT services_description_check CHECK (description IS NULL OR length(description)<=1000),
+  ADD CONSTRAINT services_duration_check CHECK (duration_minutes BETWEEN 1 AND 480),
+  ADD CONSTRAINT services_price_check CHECK (price_minor>=0),
+  ADD CONSTRAINT services_currency_check CHECK (currency ~ '^[A-Z]{3}$'),
+  ADD CONSTRAINT services_status_check CHECK (status IN ('active','inactive'));
+ALTER TABLE scheduling.professionals
+  ADD CONSTRAINT professionals_name_check CHECK (name=btrim(name) AND length(name) BETWEEN 1 AND 120),
+  ADD CONSTRAINT professionals_status_check CHECK (status IN ('active','inactive'));
+ALTER TABLE scheduling.weekly_periods
+  ADD CONSTRAINT weekly_periods_day_check CHECK (iso_weekday BETWEEN 1 AND 7),
+  ADD CONSTRAINT weekly_periods_time_check CHECK (starts_at<ends_at),
+  ADD CONSTRAINT weekly_periods_no_overlap EXCLUDE USING gist (tenant_id WITH =, professional_id WITH =, iso_weekday WITH =, tsrange(date '2000-01-03'+starts_at, date '2000-01-03'+ends_at,'[)') WITH &&);
+ALTER TABLE scheduling.availability_exceptions
+  ADD CONSTRAINT exceptions_kind_check CHECK (kind IN ('break','time_off','holiday','blocked')),
+  ADD CONSTRAINT exceptions_time_check CHECK (ends_at>starts_at),
+  ADD CONSTRAINT exceptions_reason_check CHECK (reason IS NULL OR length(reason)<=240);
+ALTER TABLE scheduling.appointments
+  ADD CONSTRAINT appointments_time_check CHECK (ends_at>starts_at),
+  ADD CONSTRAINT appointments_status_check CHECK (status IN ('confirmed','cancelled','attended','no_show')),
+  ADD CONSTRAINT appointments_customer_name_check CHECK (customer_name=btrim(customer_name) AND length(customer_name) BETWEEN 1 AND 160),
+  ADD CONSTRAINT appointments_phone_check CHECK (customer_phone ~ '^\+[1-9][0-9]{7,14}$'),
+  ADD CONSTRAINT appointments_email_check CHECK (customer_email=btrim(customer_email) AND length(customer_email)<=254 AND position('@' in customer_email)>1),
+  ADD CONSTRAINT appointments_snapshot_check CHECK (duration_minutes_snapshot BETWEEN 1 AND 480 AND price_minor_snapshot>=0);
+ALTER TABLE scheduling.appointment_events
+  ADD CONSTRAINT appointment_events_type_check CHECK (event_type IN ('created','rescheduled','cancelled','attended','no_show')),
+  ADD CONSTRAINT appointment_events_status_check CHECK (new_status IN ('confirmed','cancelled','attended','no_show') AND (previous_status IS NULL OR previous_status IN ('confirmed','cancelled','attended','no_show'))),
+  ADD CONSTRAINT appointment_events_actor_check CHECK (event_type='created' OR actor_membership_id IS NOT NULL);
+ALTER TABLE scheduling.idempotency_records
+  ADD CONSTRAINT idempotency_hash_lengths_check CHECK (octet_length(key_hash)=32 AND octet_length(request_hash)=32),
+  ADD CONSTRAINT idempotency_expiry_check CHECK (expires_at=created_at+interval '24 hours'),
+  ADD CONSTRAINT idempotency_response_check CHECK (response_status BETWEEN 200 AND 599 AND jsonb_typeof(response_headers)='object');
+ALTER TABLE scheduling.public_throttle_windows
+  ADD CONSTRAINT public_throttle_ip_hash_check CHECK (octet_length(ip_hash)=32),
+  ADD CONSTRAINT public_throttle_group_check CHECK (operation_group IN ('read','booking')),
+  ADD CONSTRAINT public_throttle_count_check CHECK (request_count>=0 AND expires_at>window_start);
+ALTER TABLE scheduling.appointments ADD CONSTRAINT appointments_confirmed_no_overlap
+  EXCLUDE USING gist (tenant_id WITH =, professional_id WITH =, tstzrange(starts_at,ends_at,'[)') WITH &&) WHERE (status='confirmed');
+CREATE FUNCTION scheduling.reject_event_mutation() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'appointment events are append-only'; END $$;
+CREATE TRIGGER appointment_events_append_only BEFORE UPDATE OR DELETE ON scheduling.appointment_events FOR EACH ROW EXECUTE FUNCTION scheduling.reject_event_mutation();
+

@@ -45,6 +45,7 @@ describe.runIf(enabled)('pilha HTTP e entrega reais', () => {
       OTP_HMAC_KEY: 'otp-e2e-secret'.padEnd(32, 'x'),
       THROTTLE_HMAC_KEY: 'throttle-e2e-secret'.padEnd(32, 'y'),
       OUTBOX_ENCRYPTION_KEY: Buffer.alloc(32, 7).toString('base64'),
+      IDEMPOTENCY_ENCRYPTION_KEY: Buffer.alloc(32, 8).toString('base64'),
       JWT_PRIVATE_KEY: keys.privateKey.export({ type: 'pkcs8', format: 'pem' }).toString(),
       JWT_PUBLIC_KEY: keys.publicKey.export({ type: 'spki', format: 'pem' }).toString(),
       JWT_KEY_ID: 'e2e-key',
